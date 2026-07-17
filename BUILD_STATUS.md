@@ -33,7 +33,7 @@
 - **Swift**: ✅ Available (version 6.3.3)
 - **Xcode**: ❌ Not installed (only Command Line Tools)
 - **GitHub CLI**: ✅ Installed and authenticated
-- **SwiftSoup**: ✅ Configured as dependency
+- **Dependencies**: ✅ None required (native Swift implementation)
 
 ### To Build and Run the App
 
@@ -51,13 +51,7 @@ You need to install the full Xcode application (not just Command Line Tools):
    open VideoWallpaperApp.xcodeproj
    ```
 
-3. **Add SwiftSoup dependency**:
-   - In Xcode: File > Add Package Dependencies
-   - Enter: `https://github.com/scinfu/SwiftSoup.git`
-   - Select version 2.6.0 or later
-   - Click "Add Package"
-
-4. **Build and run**:
+3. **Build and run**:
    - Select "VideoWallpaperApp" scheme
    - Press `⌘ + B` to build
    - Press `⌘ + R` to run
@@ -67,7 +61,7 @@ You need to install the full Xcode application (not just Command Line Tools):
 - **Total Swift Files**: 7
 - **Lines of Code**: ~3,400
 - **Targets**: 2 (App + Screen Saver)
-- **Dependencies**: 1 (SwiftSoup)
+- **Dependencies**: 0 (native Swift implementation)
 - **Frameworks**: SwiftUI, AVFoundation, ScreenSaver, Cocoa
 
 ## 🔗 GitHub Repository

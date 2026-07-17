@@ -63,11 +63,7 @@ VideoWallpaperApp/
 
 1. Clone the repository
 2. Open `VideoWallpaperApp.xcodeproj` in Xcode
-3. Add SwiftSoup dependency via Swift Package Manager:
-   - File > Add Package Dependencies
-   - Enter: `https://github.com/scinfu/SwiftSoup.git`
-   - Select version 2.6.0 or later
-4. Build and run the project
+3. Build and run the project
 
 ### Permissions Required
 
@@ -113,9 +109,9 @@ The app requires the following macOS permissions:
 
 ## Technical Implementation
 
-### Network Manager (SwiftSoup)
+### Network Manager (Native Swift Parsing)
 
-The `NetworkManager` class handles web scraping from wallsflow.com:
+The `NetworkManager` class handles web scraping from wallsflow.com using native Swift string parsing:
 
 ```swift
 // Search for wallpapers
@@ -126,10 +122,11 @@ let progress = try await networkManager.downloadVideo(from: url, to: destination
 ```
 
 Key features:
-- HTML parsing with SwiftSoup
+- Native Swift HTML parsing with regex patterns
 - Multiple selector patterns for robustness
 - Direct MP4 link extraction as fallback
 - Progress tracking for downloads
+- No external dependencies required
 
 ### Desktop Window Controller
 
@@ -213,10 +210,10 @@ Key features:
 
 ## Dependencies
 
-- **SwiftSoup**: HTML parsing for web scraping
 - **AVFoundation**: Video playback
 - **ScreenSaver**: Screen saver framework
 - **SwiftUI**: User interface
+- **Foundation**: HTML parsing with native Swift (no external dependencies)
 
 ## Troubleshooting
 
