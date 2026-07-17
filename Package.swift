@@ -8,19 +8,12 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
-    products: [
-        .library(
-            name: "VideoWallpaperApp",
-            targets: ["VideoWallpaperApp"]
-        ),
-    ],
     dependencies: [
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0")
     ],
     targets: [
-        .target(
-            name: "VideoWallpaperApp",
-            dependencies: ["SwiftSoup"]
-        ),
+        // Note: This is primarily an Xcode project. 
+        // Package.swift is used for dependency management only.
+        // Build the main app using Xcode instead.
     ]
 )
