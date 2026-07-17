@@ -1,9 +1,8 @@
 import Foundation
-import SwiftSoup
 import Combine
 
 // MARK: - Wallpaper Model
-struct Wallpaper: Identifiable, Codable {
+struct Wallpaper: Identifiable, Codable, Hashable {
     let id: String
     let title: String
     let thumbnailURL: URL
@@ -22,6 +21,7 @@ struct Wallpaper: Identifiable, Codable {
 }
 
 // MARK: - Network Manager
+@MainActor
 class NetworkManager: ObservableObject {
     static let shared = NetworkManager()
     
@@ -40,9 +40,7 @@ class NetworkManager: ObservableObject {
         errorMessage = nil
         
         defer {
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
+            isLoading = false
         }
         
         guard let searchURL = URL(string: "\(baseURL)/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)") else {
@@ -54,132 +52,125 @@ class NetworkManager: ObservableObject {
             throw NetworkError.decodingFailed
         }
         
-        let wallpapers = try parseWallpapers(from: htmlString)
+        let wallpapers = parseWallpapers(from: htmlString)
         
-        DispatchQueue.main.async {
-            self.wallpapers = wallpapers
-        }
+        self.wallpapers = wallpapers
         
         return wallpapers
     }
     
-    // MARK: - Parse HTML with SwiftSoup
-    private func parseWallpapers(from html: String) throws -> [Wallpaper] {
-        let doc: Document = try SwiftSoup.parse(html)
+    // MARK: - Parse HTML with Native Swift String Parsing
+    private func parseWallpapers(from html: String) -> [Wallpaper] {
         var wallpapers: [Wallpaper] = []
         
-        // Try multiple selector patterns based on potential HTML structure
-        let selectors = [
-            "div.video-item",
-            "div.wallpaper-item", 
-            "article.video",
-            "div[class*='video']",
-            "div[class*='wallpaper']",
-            "a[href*='.mp4']"
-        ]
+        // Pattern 1: Look for .mp4 links in href attributes
+        let mp4Pattern = #"<a\s+[^>]*href=["']([^"']*\.mp4[^"']*)["'][^>]*>([^<]*)</a>"#
+        wallpapers.append(contentsOf: extractMP4Links(from: html, using: mp4Pattern))
         
-        for selector in selectors {
-            do {
-                let elements = try doc.select(selector)
-                
-                for element in elements {
-                    if let wallpaper = try parseWallpaperElement(element) {
-                        wallpapers.append(wallpaper)
-                    }
-                }
-                
-                if !wallpapers.isEmpty {
-                    break // Found wallpapers with this selector
-                }
-            } catch {
-                continue // Try next selector
-            }
-        }
+        // Pattern 2: Look for video source elements
+        let sourcePattern = #"<source\s+[^>]*src=["']([^"']*\.mp4[^"']*)["']"#
+        wallpapers.append(contentsOf: extractSourceLinks(from: html, using: sourcePattern))
         
-        // Fallback: Direct MP4 link extraction
-        if wallpapers.isEmpty {
-            wallpapers = try extractDirectMP4Links(from: doc)
-        }
+        // Pattern 3: Look for img tags and try to construct video URLs
+        let imgPattern = #"<img\s+[^>]*src=["']([^"']*)["']"#
+        wallpapers.append(contentsOf: extractFromImages(from: html, using: imgPattern))
         
-        return wallpapers
+        // Remove duplicates
+        let uniqueWallpapers = Array(Set(wallpapers)).prefix(20)
+        
+        return Array(uniqueWallpapers)
     }
     
-    // MARK: - Parse Individual Wallpaper Element
-    private func parseWallpaperElement(_ element: Element) throws -> Wallpaper? {
-        // Try to extract thumbnail
-        let thumbnailSelector = "img[src]"
-        let videoSelector = "a[href*='.mp4'], source[src*='.mp4'], video source"
-        
-        guard let thumbnailElement = try element.select(thumbnailSelector).first(),
-              let thumbnailSrc = try thumbnailElement.attr("src").nilIfEmpty ?? try thumbnailElement.attr("data-src").nilIfEmpty else {
-            return nil
-        }
-        
-        // Convert relative URLs to absolute
-        let thumbnailURL = URL(string: thumbnailSrc.hasPrefix("http") ? thumbnailSrc : "\(baseURL)\(thumbnailSrc)")
-        
-        // Try to extract video URL
-        var videoURL: URL?
-        
-        // Try different video URL extraction methods
-        if let videoElement = try element.select(videoSelector).first() {
-            let videoSrc = try videoElement.attr("src").nilIfEmpty ?? try videoElement.attr("href").nilIfEmpty
-            if let videoSrc = videoSrc {
-                videoURL = URL(string: videoSrc.hasPrefix("http") ? videoSrc : "\(baseURL)\(videoSrc)")
-            }
-        }
-        
-        // Fallback: try to construct video URL from thumbnail
-        if videoURL == nil, let thumbnailURL = thumbnailURL {
-            videoURL = try constructVideoURL(from: thumbnailURL)
-        }
-        
-        guard let videoURL = videoURL else {
-            return nil
-        }
-        
-        // Extract title
-        let title = try element.select("h1, h2, h3, .title, .name").first()?.text() ?? "Wallpaper"
-        
-        // Extract metadata
-        let duration = try element.select(".duration, .time").first()?.text()
-        let resolution = try element.select(".resolution, .quality").first()?.text()
-        
-        return Wallpaper(
-            title: title,
-            thumbnailURL: thumbnailURL,
-            videoURL: videoURL,
-            duration: duration,
-            resolution: resolution
-        )
-    }
-    
-    // MARK: - Extract Direct MP4 Links
-    private func extractDirectMP4Links(from doc: Document) throws -> [Wallpaper] {
+    // MARK: - Extract MP4 Links from Anchor Tags
+    private func extractMP4Links(from html: String, using pattern: String) -> [Wallpaper] {
         var wallpapers: [Wallpaper] = []
+        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
         
-        let mp4Links = try doc.select("a[href*='.mp4']")
-        
-        for (index, link) in mp4Links.enumerated() {
-            guard let href = try link.attr("href").nilIfEmpty else { continue }
+        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
+            guard let match = match,
+                  match.numberOfRanges >= 3,
+                  let hrefRange = Range(match.range(at: 1), in: html),
+                  let textRange = Range(match.range(at: 2), in: html) else {
+                return
+            }
             
-            let videoURL = URL(string: href.hasPrefix("http") ? href : "\(baseURL)\(href)")
-            let thumbnailURL = videoURL // Fallback: use same URL
+            let hrefString = String(html[hrefRange])
+            let textString = String(html[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
             
-            let title = try link.text().nilIfEmpty ?? "Wallpaper \(index + 1)"
+            let videoURL = URL(string: hrefString.hasPrefix("http") ? hrefString : "\(baseURL)\(hrefString)")
+            let thumbnailURL = videoURL // Fallback
+            
+            let title = textString.isEmpty ? "Video Wallpaper" : textString
             
             wallpapers.append(Wallpaper(
                 title: title,
-                thumbnailURL: thumbnailURL,
-                videoURL: videoURL
+                thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
+                videoURL: videoURL ?? URL(string: baseURL)!
             ))
         }
         
         return wallpapers
     }
     
+    // MARK: - Extract Source Links
+    private func extractSourceLinks(from html: String, using pattern: String) -> [Wallpaper] {
+        var wallpapers: [Wallpaper] = []
+        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        
+        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
+            guard let match = match,
+                  match.numberOfRanges >= 2,
+                  let srcRange = Range(match.range(at: 1), in: html) else {
+                return
+            }
+            
+            let srcString = String(html[srcRange])
+            let videoURL = URL(string: srcString.hasPrefix("http") ? srcString : "\(baseURL)\(srcString)")
+            let thumbnailURL = videoURL
+            
+            wallpapers.append(Wallpaper(
+                title: "Video Wallpaper",
+                thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
+                videoURL: videoURL ?? URL(string: baseURL)!
+            ))
+        }
+        
+        return wallpapers
+    }
+    
+    // MARK: - Extract from Images and Construct Video URLs
+    private func extractFromImages(from html: String, using pattern: String) -> [Wallpaper] {
+        var wallpapers: [Wallpaper] = []
+        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        
+        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
+            guard let match = match,
+                  match.numberOfRanges >= 2,
+                  let srcRange = Range(match.range(at: 1), in: html) else {
+                return
+            }
+            
+            let srcString = String(html[srcRange])
+            let thumbnailURL = URL(string: srcString.hasPrefix("http") ? srcString : "\(baseURL)\(srcString)")
+            
+            // Try to construct video URL from thumbnail
+            if let videoURL = self.constructVideoURL(from: thumbnailURL ?? URL(string: baseURL)!) {
+                wallpapers.append(Wallpaper(
+                    title: "Video Wallpaper",
+                    thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
+                    videoURL: videoURL
+                ))
+            }
+        }
+        
+        return wallpapers
+    }
+    
     // MARK: - Construct Video URL from Thumbnail
-    private func constructVideoURL(from thumbnailURL: URL) throws -> URL {
+    private func constructVideoURL(from thumbnailURL: URL) -> URL? {
         let urlString = thumbnailURL.absoluteString
         
         // Common patterns:
@@ -193,6 +184,7 @@ class NetworkManager: ObservableObject {
             (".jpg", ".mp4"),
             (".png", ".mp4"),
             (".jpeg", ".mp4"),
+            (".webp", ".mp4"),
             ("_thumb", ""),
             ("_preview", ""),
             ("-thumb", ""),
@@ -204,11 +196,7 @@ class NetworkManager: ObservableObject {
             videoString = videoString.replacingOccurrences(of: pattern, with: replacement)
         }
         
-        guard let videoURL = URL(string: videoString) else {
-            throw NetworkError.invalidURL
-        }
-        
-        return videoURL
+        return URL(string: videoString)
     }
     
     // MARK: - Download Video
@@ -217,11 +205,13 @@ class NetworkManager: ObservableObject {
         
         var observation: NSKeyValueObservation?
         
-        let task = session.downloadTask(with: url) { tempURL, response, error in
+        let task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
             observation?.invalidate()
             
+            guard let self = self else { return }
+            
             if let error = error {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.errorMessage = error.localizedDescription
                 }
                 return
@@ -241,18 +231,18 @@ class NetworkManager: ObservableObject {
                 
                 try FileManager.default.moveItem(at: tempURL, to: destinationURL)
                 
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     progress.completedUnitCount = 100
                 }
             } catch {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self.errorMessage = error.localizedDescription
                 }
             }
         }
         
-        observation = task.progress.observe(\.fractionCompleted) { taskProgress in
-            DispatchQueue.main.async {
+        observation = task.progress.observe(\.fractionCompleted) { taskProgress, _ in
+            Task { @MainActor in
                 progress.completedUnitCount = Int64(taskProgress.fractionCompleted * 100)
             }
         }
@@ -301,12 +291,5 @@ enum NetworkError: LocalizedError {
         case .noResultsFound:
             return "No wallpapers found"
         }
-    }
-}
-
-// MARK: - String Extension
-extension String {
-    var nilIfEmpty: String? {
-        return self.isEmpty ? nil : self
     }
 }

@@ -8,12 +8,9 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
-    dependencies: [
-        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0")
-    ],
     targets: [
         // Note: This is primarily an Xcode project. 
-        // Package.swift is used for dependency management only.
+        // Package.swift is minimal since we removed external dependencies.
         // Build the main app using Xcode instead.
     ]
 )
