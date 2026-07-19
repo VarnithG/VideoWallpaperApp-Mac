@@ -59,11 +59,9 @@ class WallpaperManager: ObservableObject {
         
         currentWallpaper = wallpaper
         
-        // Restore desktop wallpaper if exists
-        let videoPath = videoDirectory.appendingPathComponent("\(wallpaper.id).mp4")
-        if fileManager.fileExists(atPath: videoPath.path) {
-            setDesktopWallpaper(url: videoPath, wallpaper: wallpaper, restore: true)
-        }
+        // Don't automatically restore desktop wallpaper during init
+        // This was causing crashes during app launch
+        // User can manually restore wallpapers from the UI
     }
     
     // MARK: - Set Desktop Wallpaper

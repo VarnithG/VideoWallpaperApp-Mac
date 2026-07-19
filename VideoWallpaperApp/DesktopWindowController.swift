@@ -78,15 +78,25 @@ class DesktopWindowController: NSWindowController {
     
     // MARK: - Play Video
     func playVideo(at url: URL, loop: Bool = true) {
+        // Validate URL before attempting to play
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("Video file does not exist: \(url.path)")
+            return
+        }
+        
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            print("Video file is not readable: \(url.path)")
+            return
+        }
+        
         self.videoURL = url
         
         // Stop current playback
         stopPlayback()
         
-        // Create player
+        // Create player with proper error handling
         let playerItem = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: playerItem)
-        
         self.player = player
         
         // Setup looper if needed
