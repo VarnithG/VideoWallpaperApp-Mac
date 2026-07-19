@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Cocoa
+import Foundation
 
 // MARK: - Main Content View
 struct ContentView: View {
@@ -13,6 +14,7 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var downloadedWallpapers: [Wallpaper] = []
     @State private var selectedTab: AppTab = .gallery
+    @State private var errorMessage: String?
     
     private let gridItemLayout = [
         GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)
@@ -408,6 +410,7 @@ struct WallpaperPreviewView: View {
     @State private var downloadProgress: Double = 0
     @State private var isPlaying = false
     @State private var player: AVPlayer?
+    @State private var errorMessage: String?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -502,6 +505,13 @@ struct WallpaperPreviewView: View {
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
                     }
+                    
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                            .padding(.top, 8)
+                    }
                 }
             }
             .padding(24)
@@ -512,7 +522,9 @@ struct WallpaperPreviewView: View {
     }
     
     private func setupPlayer() {
-        player = AVPlayer(url: wallpaper.videoURL)
+        // Create player with the wallpaper's video URL
+        let newPlayer = AVPlayer(url: wallpaper.videoURL)
+        self.player = newPlayer
         isPlaying = true
     }
     
@@ -531,6 +543,7 @@ struct WallpaperPreviewView: View {
             } catch {
                 await MainActor.run {
                     isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -551,6 +564,7 @@ struct WallpaperPreviewView: View {
             } catch {
                 await MainActor.run {
                     isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -572,6 +586,7 @@ struct WallpaperPreviewView: View {
             } catch {
                 await MainActor.run {
                     isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
                 }
             }
         }
@@ -581,16 +596,25 @@ struct WallpaperPreviewView: View {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let destinationURL = documentsPath.appendingPathComponent("VideoWallpaper/Videos/\(wallpaper.id).mp4")
         
-        // Start download with simple progress simulation
-        _ = try await NetworkManager.shared.downloadVideo(from: wallpaper.videoURL, to: destinationURL)
+        // Create directory if needed
+        let directory = destinationURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         
-        // Simulate progress for now
-        for i in 0...10 {
-            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            await MainActor.run {
-                downloadProgress = Double(i) / 10.0
-            }
+        // Download the file directly
+        let (tempURL, response) = try await URLSession.shared.download(from: wallpaper.videoURL)
+        
+        // Check if download was successful
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw NetworkError.downloadFailed
         }
+        
+        // Move file to destination
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        
+        try FileManager.default.moveItem(at: tempURL, to: destinationURL)
         
         return destinationURL
     }
@@ -605,20 +629,36 @@ struct VideoPlayerView: NSViewRepresentable {
         let view = NSView()
         view.wantsLayer = true
         
+        // Create AVPlayerLayer
         let playerLayer = AVPlayerLayer(player: player)
         playerLayer.videoGravity = .resizeAspectFill
         playerLayer.frame = view.bounds
         view.layer?.addSublayer(playerLayer)
         
+        // Store player layer in context for updates
+        context.coordinator.playerLayer = playerLayer
+        
         return view
     }
     
     func updateNSView(_ nsView: NSView, context: Context) {
+        // Update frame
+        context.coordinator.playerLayer?.frame = nsView.bounds
+        
+        // Handle play/pause
         if isPlaying {
             player?.play()
         } else {
             player?.pause()
         }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    class Coordinator {
+        var playerLayer: AVPlayerLayer?
     }
 }
 

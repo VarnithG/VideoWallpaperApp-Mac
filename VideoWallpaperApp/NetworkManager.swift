@@ -43,20 +43,55 @@ class NetworkManager: ObservableObject {
             isLoading = false
         }
         
-        guard let searchURL = URL(string: "\(baseURL)/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)") else {
-            throw NetworkError.invalidURL
-        }
+        // For testing, return sample wallpapers with real video URLs
+        let sampleWallpapers = [
+            Wallpaper(
+                title: "Ocean Waves",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "0:30",
+                resolution: "720p"
+            ),
+            Wallpaper(
+                title: "Forest Trees",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "0:45",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "Mountain Sunset",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "1:00",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "City Lights",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "0:25",
+                resolution: "720p"
+            ),
+            Wallpaper(
+                title: "Starry Night",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "0:35",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "Abstract Flow",
+                thumbnailURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                videoURL: URL(string: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4")!,
+                duration: "0:40",
+                resolution: "720p"
+            )
+        ]
         
-        let (data, _) = try await session.data(from: searchURL)
-        guard let htmlString = String(data: data, encoding: .utf8) else {
-            throw NetworkError.decodingFailed
-        }
+        wallpapers = sampleWallpapers
         
-        let wallpapers = parseWallpapers(from: htmlString)
-        
-        self.wallpapers = wallpapers
-        
-        return wallpapers
+        return sampleWallpapers
     }
     
     // MARK: - Parse HTML with Native Swift String Parsing

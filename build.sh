@@ -31,6 +31,7 @@ swiftc \
     -framework AVFoundation \
     -framework ApplicationServices \
     -framework UserNotifications \
+    -framework Foundation \
     -target arm64-apple-macosx14.0 \
     -O
 
