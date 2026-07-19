@@ -15,6 +15,7 @@
 		A1000011 /* LockScreenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* LockScreenManager.swift */; };
 		A1000013 /* VideoWallpaperScreenSaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014 /* VideoWallpaperScreenSaver.swift */; };
 		A1000015 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000016 /* Assets.xcassets */; };
+		A1000021 /* WallpaperHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022 /* WallpaperHistoryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,7 @@
 		A1000012 /* LockScreenManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenManager.swift; sourceTree = "<group>"; };
 		A1000014 /* VideoWallpaperScreenSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoWallpaperScreenSaver.swift; sourceTree = "<group>"; };
 		A1000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A1000022 /* WallpaperHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallpaperHistoryView.swift; sourceTree = "<group>"; };
 		A1000017 /* VideoWallpaperApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VideoWallpaperApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000018 /* VideoWallpaperScreenSaver.saver */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VideoWallpaperScreenSaver.saver; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -66,6 +68,7 @@
 				A1000008 /* WallpaperManager.swift */,
 				A1000010 /* DesktopWindowController.swift */,
 				A1000012 /* LockScreenManager.swift */,
+				A1000022 /* WallpaperHistoryView.swift */,
 				A1000016 /* Assets.xcassets */,
 			);
 			path = VideoWallpaperApp;
@@ -191,6 +194,7 @@
 				A1000007 /* WallpaperManager.swift in Sources */,
 				A1000009 /* DesktopWindowController.swift in Sources */,
 				A1000011 /* LockScreenManager.swift in Sources */,
+				A1000021 /* WallpaperHistoryView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
