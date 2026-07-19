@@ -7,8 +7,12 @@ import UserNotifications
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
+    var mainWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Create and show main window
+        showMainWindow()
+        
         // Create status bar item
         setupStatusBar()
         
@@ -83,8 +87,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // MARK: - Show Main Window
     @objc func showMainWindow() {
-        if let window = NSApplication.shared.windows.first {
-            window.makeKeyAndOrderFront(nil)
+        // Activate the app first
+        NSApp.activate(ignoringOtherApps: true)
+        
+        if let existingWindow = mainWindow {
+            existingWindow.makeKeyAndOrderFront(nil)
         } else {
             // Create new window
             let contentView = ContentView()
@@ -98,6 +105,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.setFrameAutosaveName("MainWindow")
             window.title = "Video Wallpaper"
             window.contentViewController = NSHostingController(rootView: contentView)
+            
+            // Store reference
+            mainWindow = window
+            
+            // Show window (this automatically adds it to the app)
             window.makeKeyAndOrderFront(nil)
         }
     }
