@@ -19,7 +19,7 @@ mkdir -p "$BUILD_DIR"
 echo "Compiling Swift files..."
 swiftc \
     -o "$BUILD_DIR/$APP_NAME" \
-    VideoWallpaperApp/AppDelegate.swift \
+    VideoWallpaperApp/main.swift \
     VideoWallpaperApp/ContentView.swift \
     VideoWallpaperApp/NetworkManager.swift \
     VideoWallpaperApp/WallpaperManager.swift \

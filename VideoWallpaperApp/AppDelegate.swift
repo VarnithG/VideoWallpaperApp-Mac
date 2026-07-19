@@ -12,6 +12,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("App did finish launching")
         
+        // Activate app immediately
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
         // Create and show main window immediately
         createAndShowWindow()
         
