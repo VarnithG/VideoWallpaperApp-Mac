@@ -10,6 +10,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var mainWindow: NSWindow?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Set up the application
+        setupApplication()
+        
         // Create and show main window
         showMainWindow()
         
@@ -18,6 +21,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Request necessary permissions
         requestPermissions()
+    }
+    
+    private func setupApplication() {
+        // Ensure the app is activated
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Set app icon
+        if let icon = createAppIcon() {
+            NSApplication.shared.applicationIconImage = icon
+        }
+    }
+    
+    private func createAppIcon() -> NSImage? {
+        let size = NSSize(width: 512, height: 512)
+        let image = NSImage(size: size)
+        
+        image.lockFocus()
+        
+        // Create gradient background
+        let gradient = NSGradient(colors: [
+            NSColor(red: 0.1, green: 0.5, blue: 0.9, alpha: 1.0),  // Bright blue
+            NSColor(red: 0.6, green: 0.2, blue: 0.8, alpha: 1.0)   // Purple
+        ])
+        
+        gradient?.draw(in: NSRect(origin: .zero, size: size), angle: 45)
+        
+        // Draw rounded rectangle for modern look
+        let cornerRadius: CGFloat = 60
+        let iconRect = NSRect(x: size.width * 0.2, y: size.height * 0.2, 
+                             width: size.width * 0.6, height: size.height * 0.6)
+        
+        let roundedPath = NSBezierPath(roundedRect: iconRect, xRadius: cornerRadius, yRadius: cornerRadius)
+        NSColor.white.withAlphaComponent(0.2).setFill()
+        roundedPath.fill()
+        
+        // Draw video play symbol
+        let centerX = iconRect.midX
+        let centerY = iconRect.midY
+        let playSize: CGFloat = 60
+        
+        let playPath = NSBezierPath()
+        playPath.move(to: NSPoint(x: centerX - playSize * 0.3, y: centerY - playSize))
+        playPath.line(to: NSPoint(x: centerX - playSize * 0.3, y: centerY + playSize))
+        playPath.line(to: NSPoint(x: centerX + playSize * 0.5, y: centerY))
+        playPath.close()
+        
+        NSColor.white.setFill()
+        playPath.fill()
+        
+        // Add inner glow
+        let innerGlow = NSGradient(colors: [
+            NSColor.white.withAlphaComponent(0.0),
+            NSColor.white.withAlphaComponent(0.3),
+            NSColor.white.withAlphaComponent(0.0)
+        ])
+        
+        innerGlow?.draw(in: iconRect, angle: 0)
+        
+        image.unlockFocus()
+        
+        return image
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -96,7 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Create new window
             let contentView = ContentView()
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+                contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
@@ -109,8 +174,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Store reference
             mainWindow = window
             
-            // Show window (this automatically adds it to the app)
+            // Make window visible and key
+            window.level = .normal
             window.makeKeyAndOrderFront(nil)
+            
+            // Force window to front
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
     }
 }
