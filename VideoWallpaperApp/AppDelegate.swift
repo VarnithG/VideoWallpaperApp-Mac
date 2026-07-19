@@ -1,5 +1,7 @@
 import Cocoa
 import SwiftUI
+import ApplicationServices
+import UserNotifications
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -59,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Request Permissions
     private func requestPermissions() {
         // Request accessibility permissions for desktop wallpaper
-        let options = [kAXTrustedCheckOptionPrompt.takeValue() as String: true]
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         let accessEnabled = AXIsProcessTrustedWithOptions(options as CFDictionary)
         
         if !accessEnabled {
@@ -80,7 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     // MARK: - Show Main Window
-    func showMainWindow() {
+    @objc func showMainWindow() {
         if let window = NSApplication.shared.windows.first {
             window.makeKeyAndOrderFront(nil)
         } else {
@@ -115,7 +117,7 @@ struct StatusBarView: View {
                 
                 Spacer()
                 
-                if let currentWallpaper = wallpaperManager.currentWallpaper {
+                if wallpaperManager.currentWallpaper != nil {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 8, height: 8)
@@ -191,7 +193,9 @@ struct StatusBarView: View {
                 
                 Button(action: {
                     dismiss()
-                    NSApp.delegate?.perform(#selector(AppDelegate.showMainWindow))
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        appDelegate.showMainWindow()
+                    }
                 }) {
                     HStack {
                         Image(systemName: "rectangle.on.rectangle")

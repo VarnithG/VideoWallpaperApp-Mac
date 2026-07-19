@@ -242,8 +242,3 @@ struct HistoryWallpaperCard: View {
         try? FileManager.default.removeItem(at: videoPath)
     }
 }
-
-// MARK: - Preview
-#Preview {
-    WallpaperHistoryView()
-}

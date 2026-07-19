@@ -1,6 +1,7 @@
 import Foundation
 import Cocoa
 import Combine
+import UserNotifications
 
 // MARK: - Wallpaper Manager
 class WallpaperManager: ObservableObject {
@@ -157,11 +158,19 @@ class WallpaperManager: ObservableObject {
     
     // MARK: - Show Notification
     private func showNotification(title: String, message: String) {
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.informativeText = message
-        notification.soundName = NSUserNotificationDefaultSoundName
+        let center = UNUserNotificationCenter.current()
         
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = UNNotificationSound.default
+        
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        
+        center.add(request) { error in
+            if let error = error {
+                print("Notification error: \(error.localizedDescription)")
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Cocoa
+import UserNotifications
 
 // MARK: - Lock Screen Manager
 class LockScreenManager {
@@ -100,7 +101,7 @@ class LockScreenManager {
     // MARK: - Save Lock Screen Metadata
     private func saveLockScreenMetadata(wallpaper: Wallpaper, filename: String) {
         let metadata: [String: Any] = [
-            "wallpaper": try? JSONEncoder().encode(wallpaper),
+            "wallpaper": (try? JSONEncoder().encode(wallpaper)) as Any,
             "filename": filename,
             "date": Date()
         ]
@@ -180,7 +181,7 @@ class LockScreenManager {
         
         if let appleScript = NSAppleScript(source: script) {
             var error: NSDictionary?
-            let result = appleScript.executeAndReturnError(&error)
+            _ = appleScript.executeAndReturnError(&error)
             return error == nil
         }
         
@@ -189,11 +190,19 @@ class LockScreenManager {
     
     // MARK: - Show Notification
     private func showNotification(title: String, message: String) {
-        let notification = NSUserNotification()
-        notification.title = title
-        notification.informativeText = message
-        notification.soundName = NSUserNotificationDefaultSoundName
+        let center = UNUserNotificationCenter.current()
         
-        NSUserNotificationCenter.default.deliver(notification)
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = message
+        content.sound = UNNotificationSound.default
+        
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        
+        center.add(request) { error in
+            if let error = error {
+                print("Notification error: \(error.localizedDescription)")
+            }
+        }
     }
 }

@@ -53,13 +53,7 @@ To build and run the app, you need Xcode:
    open VideoWallpaperApp.xcodeproj
    ```
 
-3. Add SwiftSoup dependency:
-   - In Xcode, go to File > Add Package Dependencies
-   - Enter: `https://github.com/scinfu/SwiftSoup.git`
-   - Select version 2.6.0 or later
-   - Click "Add Package"
-
-4. Build the project:
+3. Build the project:
    - Press `⌘ + B` to build
    - Select "VideoWallpaperApp" scheme
    - Press `⌘ + R` to run

@@ -122,7 +122,7 @@ struct ContentView: View {
             Spacer()
             
             // Active wallpaper indicator
-            if let currentWallpaper = wallpaperManager.currentWallpaper {
+            if wallpaperManager.currentWallpaper != nil {
                 HStack(spacing: 8) {
                     Circle()
                         .fill(Color.green)
@@ -581,11 +581,14 @@ struct WallpaperPreviewView: View {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let destinationURL = documentsPath.appendingPathComponent("VideoWallpaper/Videos/\(wallpaper.id).mp4")
         
-        let progress = try await NetworkManager.shared.downloadVideo(from: wallpaper.videoURL, to: destinationURL)
+        // Start download with simple progress simulation
+        _ = try await NetworkManager.shared.downloadVideo(from: wallpaper.videoURL, to: destinationURL)
         
-        for await progressValue in progress {
+        // Simulate progress for now
+        for i in 0...10 {
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             await MainActor.run {
-                downloadProgress = Double(progress.completedUnitCount) / Double(progress.totalUnitCount)
+                downloadProgress = Double(i) / 10.0
             }
         }
         
@@ -598,18 +601,23 @@ struct VideoPlayerView: NSViewRepresentable {
     let player: AVPlayer?
     @Binding var isPlaying: Bool
     
-    func makeNSView(context: Context) -> AVPlayerView {
-        let playerView = AVPlayerView()
-        playerView.player = player
-        playerView.controlsStyle = .floating
-        return playerView
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.wantsLayer = true
+        
+        let playerLayer = AVPlayerLayer(player: player)
+        playerLayer.videoGravity = .resizeAspectFill
+        playerLayer.frame = view.bounds
+        view.layer?.addSublayer(playerLayer)
+        
+        return view
     }
     
-    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+    func updateNSView(_ nsView: NSView, context: Context) {
         if isPlaying {
-            nsView.player?.play()
+            player?.play()
         } else {
-            nsView.player?.pause()
+            player?.pause()
         }
     }
 }
@@ -689,9 +697,4 @@ struct SettingsView: View {
         }
         .frame(width: 400, height: 400)
     }
-}
-
-// MARK: - Preview
-#Preview {
-    ContentView()
 }
