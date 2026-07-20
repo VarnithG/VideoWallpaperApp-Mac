@@ -69,6 +69,23 @@ class WallpaperManager: ObservableObject {
         currentWallpaper = wallpaper
         saveMetadata()
         
+        // Validate file before attempting to play
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("Video file does not exist: \(url.path)")
+            if !restore {
+                showNotification(title: "Error", message: "Video file not found")
+            }
+            return
+        }
+        
+        guard FileManager.default.isReadableFile(atPath: url.path) else {
+            print("Video file is not readable: \(url.path)")
+            if !restore {
+                showNotification(title: "Error", message: "Cannot read video file")
+            }
+            return
+        }
+        
         desktopWindowController.playVideo(at: url, loop: shouldLoop)
         desktopWindowController.setMuted(isMuted)
         

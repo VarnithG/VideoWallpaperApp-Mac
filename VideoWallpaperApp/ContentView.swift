@@ -43,11 +43,26 @@ struct ContentView: View {
                 }
             }
         }
+        .onAppear {
+            // Load wallpapers on app launch
+            Task {
+                await loadSampleWallpapers()
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: { showingSettings = true }) {
                     Image(systemName: "gearshape")
                 }
+            }
+            
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: {
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .help("Quit App")
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -98,10 +113,8 @@ struct ContentView: View {
             // Content
             if networkManager.isLoading {
                 loadingView
-            } else if networkManager.wallpapers.isEmpty && searchText.isEmpty {
-                emptyStateView
             } else if networkManager.wallpapers.isEmpty {
-                noResultsView
+                emptyStateView
             } else {
                 wallpaperGridView
             }
@@ -165,7 +178,9 @@ struct ContentView: View {
                 if !searchText.isEmpty {
                     Button(action: {
                         searchText = ""
-                        networkManager.wallpapers = []
+                        Task {
+                            await loadSampleWallpapers()
+                        }
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.secondary)
@@ -295,6 +310,15 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Load Sample Wallpapers
+    private func loadSampleWallpapers() async {
+        do {
+            _ = try await networkManager.searchWallpapers(query: "nature")
+        } catch {
+            print("Error loading sample wallpapers: \(error)")
+        }
+    }
+    
     // MARK: - Load Downloaded Wallpapers
     private func loadDownloadedWallpapers() {
         downloadedWallpapers = wallpaperManager.getDownloadedWallpapers()
@@ -306,49 +330,41 @@ struct WallpaperGridItem: View {
     let wallpaper: Wallpaper
     @State private var thumbnailImage: NSImage?
     @State private var isLoading = true
+    @State private var player: AVPlayer?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
+            // Thumbnail - using video preview
             ZStack {
-                if let image = thumbnailImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                if let player = player {
+                    VideoPlayerView(player: player, isPlaying: .constant(true))
                         .frame(height: 140)
-                        .clipped()
+                        .cornerRadius(8)
                 } else if isLoading {
-                    Rectangle()
-                        .fill(Color(NSColor.controlBackgroundColor))
+                    ProgressView()
                         .frame(height: 140)
-                        .overlay(
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        )
                 } else {
-                    Rectangle()
-                        .fill(Color(NSColor.controlBackgroundColor))
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.gray.opacity(0.3))
                         .frame(height: 140)
                         .overlay(
-                            Image(systemName: "photo")
-                                .foregroundColor(.secondary)
+                            VStack {
+                                Image(systemName: "video.fill")
+                                    .font(.system(size: 24))
+                                Text("Video")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(.secondary)
                         )
-                }
-                
-                // Play button overlay
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.white)
-                            .shadow(radius: 4)
-                    }
-                    .padding(12)
                 }
             }
-            .cornerRadius(12)
+            .clipped()
+            .onAppear {
+                loadVideoPreview()
+            }
+            .onDisappear {
+                player?.pause()
+            }
             
             // Info
             VStack(alignment: .leading, spacing: 4) {
@@ -376,26 +392,23 @@ struct WallpaperGridItem: View {
             }
         }
         .onAppear {
-            loadThumbnail()
+            loadVideoPreview()
         }
     }
     
-    private func loadThumbnail() {
-        Task {
-            do {
-                let localURL = try await NetworkManager.shared.downloadThumbnail(from: wallpaper.thumbnailURL)
-                
-                if let image = NSImage(contentsOf: localURL) {
-                    await MainActor.run {
-                        self.thumbnailImage = image
-                        self.isLoading = false
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
-            }
+    private func loadVideoPreview() {
+        // Create a muted player for thumbnail preview
+        let newPlayer = AVPlayer(url: wallpaper.videoURL)
+        newPlayer.isMuted = true
+        newPlayer.volume = 0
+        
+        // Set to loop for preview
+        newPlayer.actionAtItemEnd = .none
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.player = newPlayer
+            self.player?.play()
+            self.isLoading = false
         }
     }
 }
