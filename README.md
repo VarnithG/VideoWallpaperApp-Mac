@@ -1,75 +1,50 @@
 # Video Wallpaper App
 
-A macOS application that allows users to set video files as desktop wallpaper, screensaver, and lock screen backgrounds. Features a searchable gallery interface that can download live wallpapers from wallsflow.com.
+A macOS application that allows you to set video files as your desktop wallpaper, screen saver, and lock screen. Download videos directly from any URL and use them as live wallpapers.
 
 ## Features
 
-- **Searchable Gallery**: Browse and search for live wallpapers from wallsflow.com
-- **Desktop Video Wallpaper**: Set videos as your desktop background using AVPlayerLayer
-- **Screen Saver**: Native macOS screen saver plugin with video playback
-- **Lock Screen Integration**: Replace system lock screen wallpapers (requires admin privileges)
-- **Sleek UI**: MacBook-inspired interface with minimal design
-- **Wallpaper History**: Track and reuse previously downloaded wallpapers
+- **Direct Video Downloads**: Download videos from any direct URL to your computer
+- **Desktop Video Wallpaper**: Set downloaded videos as your desktop background
+- **Screen Saver**: Use videos as your screen saver
+- **Lock Screen Integration**: Set videos as your lock screen background
+- **Local File Management**: Browse and manage your downloaded wallpapers
+- **Video Preview**: Preview wallpapers before setting them
+- **Simple Interface**: Easy-to-use interface with download and management sections
 
-## Project Structure
+## How It Works
 
+### Direct Download Approach
+The app uses a direct download approach instead of web scraping:
+1. **Download Section**: Enter any direct video URL to download
+2. **Local Storage**: Videos are saved to `~/Documents/VideoWallpaper/Downloads/`
+3. **My Downloads**: Browse your downloaded videos in the app
+4. **File Access**: Open your downloads folder directly from the app
+5. **Set Wallpaper**: Use any downloaded video as wallpaper/screen saver/lock screen
+
+### Supported Video Sources
+- Direct MP4 file URLs from any website
+- Your own video files
+- Public domain videos
+- Personal video collections
+- Any accessible video URL
+
+## Building Without Xcode
+
+The app can be built without Xcode using the provided scripts:
+
+```bash
+cd /Users/varnith/VideoWallpaperApp
+./build.sh
+./create_app_bundle.sh
+open build/VideoWallpaperApp.app
 ```
-VideoWallpaperApp/
-├── VideoWallpaperApp.xcodeproj/
-│   └── project.pbxproj
-├── VideoWallpaperApp/
-│   ├── AppDelegate.swift              # Main app delegate with status bar
-│   ├── ContentView.swift              # Main SwiftUI interface
-│   ├── NetworkManager.swift           # Web scraping and download manager
-│   ├── WallpaperManager.swift         # Wallpaper state management
-│   ├── DesktopWindowController.swift  # Desktop video window controller
-│   ├── LockScreenManager.swift        # Lock screen file manager
-│   ├── WallpaperHistoryView.swift    # Wallpaper history UI
-│   ├── VideoWallpaperApp.entitlements # App sandbox entitlements
-│   └── Assets.xcassets                # App assets
-├── VideoWallpaperScreenSaver/
-│   ├── VideoWallpaperScreenSaver.swift    # Screen saver plugin
-│   └── VideoWallpaperScreenSaver.entitlements
-└── Package.swift                     # Swift Package Manager dependencies
-```
 
-## Targets
+## Required Permissions
 
-### 1. VideoWallpaperApp (Main Application)
-- **Purpose**: Main app with SwiftUI interface
-- **Frameworks**: SwiftUI, AVFoundation, SwiftSoup
-- **Key Components**:
-  - Searchable gallery with networking
-  - Desktop wallpaper window controller
-  - Lock screen file manager
-  - Status bar integration
+For the app to work properly, you need to enable the following macOS permissions:
 
-### 2. VideoWallpaperScreenSaver (Screen Saver Plugin)
-- **Purpose**: Native macOS screen saver
-- **Frameworks**: ScreenSaver, AVFoundation
-- **Key Components**:
-  - Video playback in screen saver context
-  - Configuration sheet for settings
-  - Loop and mute controls
-
-## Installation
-
-### Prerequisites
-- macOS 14.0 (Sonoma) or later
-- Xcode 15.0 or later
-- Swift 5.9 or later
-
-### Build Steps
-
-1. Clone the repository
-2. Open `VideoWallpaperApp.xcodeproj` in Xcode
-3. Build and run the project
-
-### Permissions Required
-
-The app requires the following macOS permissions for full functionality:
-
-#### 1. Accessibility Permission (Required for Desktop Wallpaper)
+### 1. Accessibility Permission (Required for Desktop Wallpaper)
 - **Why**: The app needs accessibility permission to display windows on your desktop behind other windows
 - **How to enable**:
   1. Go to System Preferences > Security & Privacy > Privacy > Accessibility
@@ -77,7 +52,7 @@ The app requires the following macOS permissions for full functionality:
   3. Add "VideoWallpaperApp" to the list or check the box if already present
   4. Restart the app after enabling
 
-#### 2. Full Disk Access (Required for Screen Saver and Lock Screen)
+### 2. Full Disk Access (Required for Screen Saver and Lock Screen)
 - **Why**: The app needs access to system folders to install screen saver and lock screen files
 - **How to enable**:
   1. Go to System Preferences > Security & Privacy > Privacy > Full Disk Access
@@ -85,15 +60,15 @@ The app requires the following macOS permissions for full functionality:
   3. Add "VideoWallpaperApp" to the list or check the box if already present
   4. Restart the app after enabling
 
-#### 3. Internet Access (Required for Downloading Wallpapers)
-- **Why**: The app needs internet access to download wallpapers from wallsflow.com
+### 3. Internet Access (Required for Downloading Videos)
+- **Why**: The app needs internet access to download videos from URLs
 - **How to enable**:
   1. Go to System Preferences > Security & Privacy > Privacy > Outgoing Connections
   2. Click the lock icon to make changes (requires admin password)
   3. Add "VideoWallpaperApp" to the list or check the box if already present
   4. Most apps have this enabled by default
 
-#### 4. Notification Permissions (Optional)
+### 4. Notification Permissions (Optional)
 - **Why**: The app can send notifications when wallpapers are set
 - **How to enable**:
   1. Go to System Preferences > Notifications
@@ -107,167 +82,165 @@ When you first launch the app, you may see prompts for these permissions. Make s
 - Restart the app after granting permissions
 - If prompts don't appear, manually enable them in System Preferences
 
-## Usage
+## Installation Instructions
 
-### Setting Desktop Wallpaper
+1. **Build the app**:
+   ```bash
+   cd /Users/varnith/VideoWallpaperApp
+   ./build.sh
+   ./create_app_bundle.sh
+   ```
 
-1. Search for wallpapers using the search bar
-2. Click on a wallpaper to preview
-3. Click "Set as Desktop Wallpaper"
-4. The video will play behind your desktop icons
+2. **Enable permissions** (see Required Permissions section above)
 
-### Setting Screen Saver
+3. **Run the app**:
+   ```bash
+   open build/VideoWallpaperApp.app
+   ```
 
-1. Search and select a wallpaper
-2. Click "Set as Screen Saver"
-3. Open System Preferences > Desktop & Screen Saver
-4. Select "Video Wallpaper Screen Saver"
+## How to Use
 
-### Setting Lock Screen
+### Downloading Videos
 
-1. Search and select a wallpaper
-2. Click "Set as Lock Screen"
-3. The app will replace an Apple Aerial video in the system directory
-4. **Note**: Requires administrator privileges
+1. **Open Download Section**: Click "Download Video" in the sidebar
+2. **Enter Video URL**: Paste a direct video URL (e.g., `https://example.com/video.mp4`)
+3. **Enter Title**: Give your wallpaper a name
+4. **Click Download**: The video will be downloaded to your downloads folder
+5. **Auto-redirect**: App automatically switches to "My Downloads" after download
 
-### Managing History
+### Setting Wallpapers
 
-1. Click the "History" tab
-2. View previously downloaded wallpapers
-3. Reuse wallpapers with one click
-4. Clear history when needed
+1. **Browse Downloads**: Click "My Downloads" in the sidebar
+2. **Select Wallpaper**: Click on any downloaded wallpaper to preview
+3. **Choose Type**: Click "Set as Desktop Wallpaper", "Set as Screen Saver", or "Set as Lock Screen"
+4. **Enjoy**: Your wallpaper is now active
+
+### Managing Downloads
+
+1. **Open Folder**: Click "Open Folder" in the sidebar to access your downloads
+2. **Delete Wallpapers**: Right-click on any wallpaper and select "Delete"
+3. **Add Your Own**: You can also manually add video files to the downloads folder
+
+### Downloads Folder Location
+
+Your downloaded videos are stored at:
+```
+~/Documents/VideoWallpaper/Downloads/
+```
+
+You can:
+- Access this folder directly from Finder
+- Add your own video files to this folder
+- They will appear in the app's "My Downloads" section
+- Delete files directly from the folder
+
+## Troubleshooting
+
+### Wallpaper not showing on desktop
+- Make sure Accessibility permission is enabled
+- Check that the app is running in the background
+- Try setting the wallpaper again
+- Verify the video file exists in your downloads folder
+
+### Download failed error
+- Check your internet connection
+- Verify the video URL is direct and accessible
+- Ensure the URL ends with .mp4 or is a direct video link
+- Check if Outgoing Connections permission is enabled
+
+### Video won't play
+- Verify the video file is not corrupted
+- Check that the video format is supported (MP4 recommended)
+- Try downloading the video again
+- Test the video file in QuickTime Player
+
+### Screen saver not working
+- Make sure Full Disk Access is enabled
+- Check that the screen saver file was installed correctly
+- Try setting the screen saver again
+- Verify the video file exists in your downloads folder
+
+### Lock screen not working
+- Make sure Full Disk Access is enabled
+- Check that the lock screen file was installed correctly
+- Try setting the lock screen again
+- Verify the video file exists in your downloads folder
+
+## Video URL Examples
+
+These are examples of direct video URLs you can use:
+
+- **Sample Videos**: `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4`
+- **Your Own Files**: Upload videos to cloud storage and use direct links
+- **Public Domain**: Use videos from public domain sources
+- **Personal Files**: Use videos from your own servers or storage
+
+## Tips for Best Results
+
+1. **Use Direct URLs**: Make sure the URL points directly to the video file
+2. **MP4 Format**: MP4 files work best with macOS
+3. **Reasonable Size**: Large files may take longer to download
+4. **Stable Connection**: Ensure good internet connection for downloads
+5. **Backup**: Keep backups of your favorite wallpapers
 
 ## Technical Implementation
 
-### Network Manager (Native Swift Parsing)
-
-The `NetworkManager` class handles web scraping from wallsflow.com using native Swift string parsing:
-
-```swift
-// Search for wallpapers
-let wallpapers = try await networkManager.searchWallpapers(query: "nature")
-
-// Download video
-let progress = try await networkManager.downloadVideo(from: url, to: destinationURL)
-```
-
-Key features:
-- Native Swift HTML parsing with regex patterns
-- Multiple selector patterns for robustness
-- Direct MP4 link extraction as fallback
+### Download Management
+- Direct URL downloads using URLSession
+- Automatic file management in designated folder
 - Progress tracking for downloads
-- No external dependencies required
+- Error handling for failed downloads
 
-### Desktop Window Controller
+### File System
+- Dedicated downloads folder in Documents
+- Automatic directory creation
+- File conflict resolution
+- Easy file access and management
 
-The `DesktopWindowController` creates a borderless window:
-
-```swift
-let window = NSWindow(
-    contentRect: screen.visibleRect,
-    styleMask: [.borderless, .fullSizeContentView],
-    backing: .buffered,
-    defer: false
-)
-
-window.level = CGWindowLevelForKey(.desktopWindow)
-window.ignoresMouseEvents = true
-```
-
-Key features:
-- Window level below desktop icons
-- AVPlayerLayer for video playback
-- Automatic screen resize handling
-- Loop and mute controls
-
-### Lock Screen Manager
-
-The `LockScreenManager` handles system file operations:
-
-```swift
-// User-level (no admin required)
-lockScreenManager.setLockScreenVideo(url: url, wallpaper: wallpaper)
-
-// System-level (requires admin)
-lockScreenManager.setLockScreenVideoSystemLevel(url: url, wallpaper: wallpaper)
-```
-
-Key features:
-- UUID-based filename generation
-- Automatic backup of original files
-- User and system directory support
-- Metadata tracking
-
-### Screen Saver Plugin
-
-The screen saver uses the native ScreenSaver framework:
-
-```swift
-class VideoWallpaperScreenSaver: ScreenSaverView {
-    override func startAnimation() {
-        super.startAnimation()
-        setupPlayer(with: videoURL)
-    }
-}
-```
-
-Key features:
-- Native screen saver integration
-- Configuration sheet
-- Loop and mute controls
-- Preview mode support
+### Wallpaper Management
+- Desktop wallpaper using AVPlayerLayer
+- Screen saver plugin integration
+- Lock screen file replacement
+- Video preview before setting
 
 ## Architecture
 
 ### MVVM Pattern
-
-- **Model**: `Wallpaper` struct, network models
-- **View**: SwiftUI views, screen saver views
-- **ViewModel**: `NetworkManager`, `WallpaperManager`
-
-### Coordinator Pattern
-
-- `AppDelegate` coordinates main app flow
-- `DesktopWindowController` manages desktop wallpaper
-- `LockScreenManager` handles lock screen operations
-- Individual view controllers for UI sections
+- **Model**: `Wallpaper` struct for video data
+- **View**: SwiftUI views for interface
+- **ViewModel**: `NetworkManager` and `WallpaperManager`
 
 ### State Management
-
 - `@Published` properties for reactive updates
-- `UserDefaults` for persistent settings
-- File-based metadata for wallpaper tracking
+- File-based storage for downloads
+- Local file system integration
 
 ## Dependencies
 
 - **AVFoundation**: Video playback
 - **ScreenSaver**: Screen saver framework
 - **SwiftUI**: User interface
-- **Foundation**: HTML parsing with native Swift (no external dependencies)
+- **Foundation**: File system and networking
 
-## Troubleshooting
+## Security
 
-### Desktop wallpaper not showing
-- Ensure accessibility permissions are granted
-- Check that the video file exists in Documents/VideoWallpaper/Videos
-- Try restarting the app
+- Downloads stored in user's Documents folder
+- No external dependencies
+- No cloud storage of your videos
+- Local file management only
+- No data collection or tracking
 
-### Screen saver not appearing
-- Verify the screen saver is installed in ~/Library/Screen Savers/
-- Check System Preferences > Desktop & Screen Saver
-- Ensure the video file is properly copied
+## Future Enhancements
 
-### Lock screen changes not working
-- Verify administrator privileges
-- Check system directory permissions
-- Ensure Apple Aerial videos exist on system
-
-## License
-
-This project is provided as-is for educational purposes.
+Potential future features:
+- Thumbnail generation for local videos
+- Video editing capabilities
+- Playlist support
+- Cloud backup integration
+- More format support
 
 ## Credits
 
-- Wallpaper content sourced from wallsflow.com
-- Inspired by Apple's Aerial screen saver
-- Built with Swift and SwiftUI
+- Built with SwiftUI and AVFoundation
+- No external dependencies beyond standard macOS frameworks
+- User maintains full control of their video files

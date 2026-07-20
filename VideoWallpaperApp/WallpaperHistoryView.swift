@@ -210,21 +210,9 @@ struct HistoryWallpaperCard: View {
     }
     
     private func loadThumbnail() {
-        Task {
-            do {
-                let localURL = try await NetworkManager.shared.downloadThumbnail(from: wallpaper.thumbnailURL)
-                
-                if let image = NSImage(contentsOf: localURL) {
-                    await MainActor.run {
-                        self.thumbnailImage = image
-                        self.isLoading = false
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    self.isLoading = false
-                }
-            }
+        // For local files, just show a placeholder
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.isLoading = false
         }
     }
     
