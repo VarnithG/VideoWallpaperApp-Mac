@@ -6,6 +6,7 @@ enum NetworkError: Error, LocalizedError {
     case invalidURL
     case downloadFailed
     case decodingFailed
+    case noResultsFound
     
     var errorDescription: String? {
         switch self {
@@ -15,6 +16,8 @@ enum NetworkError: Error, LocalizedError {
             return "Failed to decode response"
         case .downloadFailed:
             return "Failed to download content"
+        case .noResultsFound:
+            return "No wallpapers found"
         }
     }
 }
@@ -38,8 +41,20 @@ struct Wallpaper: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Website Section
+struct WebsiteSection: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let url: String
+    
+    init(id: String, name: String, url: String) {
+        self.id = id
+        self.name = name
+        self.url = url
+    }
+}
+
 // MARK: - Network Manager
-@MainActor
 class NetworkManager: ObservableObject {
     static let shared = NetworkManager()
     
@@ -47,10 +62,56 @@ class NetworkManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private let baseURL = "https://wallsflow.com"
     private let session = URLSession.shared
+    private let baseURL = "https://wallsflow.com"
+    
+    // Website sections similar to wallsflow.com
+    let sections: [WebsiteSection] = [
+        WebsiteSection(id: "trending", name: "Trending", url: "/trending"),
+        WebsiteSection(id: "new", name: "New", url: "/new"),
+        WebsiteSection(id: "popular", name: "Popular", url: "/popular"),
+        WebsiteSection(id: "4k", name: "4K", url: "/4k"),
+        WebsiteSection(id: "anime", name: "Anime", url: "/anime"),
+        WebsiteSection(id: "cars", name: "Cars", url: "/cars"),
+        WebsiteSection(id: "nature", name: "Nature", url: "/nature"),
+        WebsiteSection(id: "abstract", name: "Abstract", url: "/abstract"),
+        WebsiteSection(id: "space", name: "Space", url: "/space"),
+        WebsiteSection(id: "gaming", name: "Gaming", url: "/gaming"),
+        WebsiteSection(id: "cities", name: "Cities", url: "/cities"),
+        WebsiteSection(id: "minimal", name: "Minimal", url: "/minimal")
+    ]
     
     private init() {}
+    
+    // MARK: - Fetch Section Wallpapers
+    func fetchSectionWallpapers(section: WebsiteSection) async throws -> [Wallpaper] {
+        isLoading = true
+        errorMessage = nil
+        
+        defer {
+            isLoading = false
+        }
+        
+        let urlString = "\(baseURL)\(section.url)"
+        guard let url = URL(string: urlString) else {
+            throw NetworkError.invalidURL
+        }
+        
+        let (data, _) = try await session.data(from: url)
+        guard let htmlString = String(data: data, encoding: .utf8) else {
+            throw NetworkError.decodingFailed
+        }
+        
+        let wallpapers = parseWallpapersFromHTML(htmlString)
+        
+        if wallpapers.isEmpty {
+            throw NetworkError.noResultsFound
+        }
+        
+        self.wallpapers = wallpapers
+        
+        return wallpapers
+    }
     
     // MARK: - Search Wallpapers
     func searchWallpapers(query: String) async throws -> [Wallpaper] {
@@ -61,244 +122,107 @@ class NetworkManager: ObservableObject {
             isLoading = false
         }
         
-        // Return working sample wallpapers with real video URLs
-        let sampleWallpapers = [
-            Wallpaper(
-                title: "Ocean Waves",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
-                duration: "0:30",
-                resolution: "720p"
-            ),
-            Wallpaper(
-                title: "Mountain View",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4")!,
-                duration: "0:45",
-                resolution: "1080p"
-            ),
-            Wallpaper(
-                title: "Forest Scene",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4")!,
-                duration: "1:00",
-                resolution: "1080p"
-            ),
-            Wallpaper(
-                title: "City Lights",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4")!,
-                duration: "0:25",
-                resolution: "720p"
-            ),
-            Wallpaper(
-                title: "Starry Night",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4")!,
-                duration: "0:35",
-                resolution: "1080p"
-            ),
-            Wallpaper(
-                title: "Abstract Flow",
-                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4")!,
-                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4")!,
-                duration: "0:40",
-                resolution: "720p"
-            )
-        ]
-        
-        wallpapers = sampleWallpapers
-        
-        print("Loaded \(sampleWallpapers.count) wallpapers")
-        
-        return sampleWallpapers
-    }
-    
-    // MARK: - Parse HTML with Native Swift String Parsing
-    private func parseWallpapers(from html: String) -> [Wallpaper] {
-        var wallpapers: [Wallpaper] = []
-        
-        // Pattern 1: Look for .mp4 links in href attributes
-        let mp4Pattern = #"<a\s+[^>]*href=["']([^"']*\.mp4[^"']*)["'][^>]*>([^<]*)</a>"#
-        wallpapers.append(contentsOf: extractMP4Links(from: html, using: mp4Pattern))
-        
-        // Pattern 2: Look for video source elements
-        let sourcePattern = #"<source\s+[^>]*src=["']([^"']*\.mp4[^"']*)["']"#
-        wallpapers.append(contentsOf: extractSourceLinks(from: html, using: sourcePattern))
-        
-        // Pattern 3: Look for img tags and try to construct video URLs
-        let imgPattern = #"<img\s+[^>]*src=["']([^"']*)["']"#
-        wallpapers.append(contentsOf: extractFromImages(from: html, using: imgPattern))
-        
-        // Remove duplicates
-        let uniqueWallpapers = Array(Set(wallpapers)).prefix(20)
-        
-        return Array(uniqueWallpapers)
-    }
-    
-    // MARK: - Extract MP4 Links from Anchor Tags
-    private func extractMP4Links(from html: String, using pattern: String) -> [Wallpaper] {
-        var wallpapers: [Wallpaper] = []
-        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-        let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        
-        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
-            guard let match = match,
-                  match.numberOfRanges >= 3,
-                  let hrefRange = Range(match.range(at: 1), in: html),
-                  let textRange = Range(match.range(at: 2), in: html) else {
-                return
-            }
-            
-            let hrefString = String(html[hrefRange])
-            let textString = String(html[textRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            let videoURL = URL(string: hrefString.hasPrefix("http") ? hrefString : "\(baseURL)\(hrefString)")
-            let thumbnailURL = videoURL // Fallback
-            
-            let title = textString.isEmpty ? "Video Wallpaper" : textString
-            
-            wallpapers.append(Wallpaper(
-                title: title,
-                thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
-                videoURL: videoURL ?? URL(string: baseURL)!
-            ))
+        let urlString = "\(baseURL)/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)"
+        guard let url = URL(string: urlString) else {
+            throw NetworkError.invalidURL
         }
+        
+        let (data, _) = try await session.data(from: url)
+        guard let htmlString = String(data: data, encoding: .utf8) else {
+            throw NetworkError.decodingFailed
+        }
+        
+        let wallpapers = parseWallpapersFromHTML(htmlString)
+        
+        if wallpapers.isEmpty {
+            throw NetworkError.noResultsFound
+        }
+        
+        self.wallpapers = wallpapers
         
         return wallpapers
     }
     
-    // MARK: - Extract Source Links
-    private func extractSourceLinks(from html: String, using pattern: String) -> [Wallpaper] {
+    // MARK: - Parse Wallpapers from HTML
+    private func parseWallpapersFromHTML(_ html: String) -> [Wallpaper] {
         var wallpapers: [Wallpaper] = []
-        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
-        let range = NSRange(html.startIndex..<html.endIndex, in: html)
         
-        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
-            guard let match = match,
-                  match.numberOfRanges >= 2,
-                  let srcRange = Range(match.range(at: 1), in: html) else {
-                return
-            }
-            
-            let srcString = String(html[srcRange])
-            let videoURL = URL(string: srcString.hasPrefix("http") ? srcString : "\(baseURL)\(srcString)")
-            let thumbnailURL = videoURL
-            
-            wallpapers.append(Wallpaper(
-                title: "Video Wallpaper",
-                thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
-                videoURL: videoURL ?? URL(string: baseURL)!
-            ))
+        // Parse HTML to extract wallpaper information
+        // This is a simplified parser for wallsflow.com structure
+        
+        // Find all video card elements
+        let pattern = #"<a[^>]*href=["']([^"']*)["'][^>]*>.*?<img[^>]*src=["']([^"']*)["'][^>]*>.*?<h3[^>]*>([^<]*)</h3>"#
+        
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
         }
         
-        return wallpapers
-    }
-    
-    // MARK: - Extract from Images and Construct Video URLs
-    private func extractFromImages(from html: String, using pattern: String) -> [Wallpaper] {
-        var wallpapers: [Wallpaper] = []
-        let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        let matches = regex.matches(in: html, options: [], range: range)
         
-        regex?.enumerateMatches(in: html, options: [], range: range) { match, _, _ in
-            guard let match = match,
-                  match.numberOfRanges >= 2,
-                  let srcRange = Range(match.range(at: 1), in: html) else {
-                return
-            }
+        for match in matches {
+            guard match.numberOfRanges >= 4 else { continue }
             
-            let srcString = String(html[srcRange])
-            let thumbnailURL = URL(string: srcString.hasPrefix("http") ? srcString : "\(baseURL)\(srcString)")
+            let hrefRange = Range(match.range(at: 1), in: html)
+            let imgRange = Range(match.range(at: 2), in: html)
+            let titleRange = Range(match.range(at: 3), in: html)
             
-            // Try to construct video URL from thumbnail
-            if let videoURL = self.constructVideoURL(from: thumbnailURL ?? URL(string: baseURL)!) {
-                wallpapers.append(Wallpaper(
-                    title: "Video Wallpaper",
-                    thumbnailURL: thumbnailURL ?? URL(string: baseURL)!,
-                    videoURL: videoURL
-                ))
+            guard let hrefRange = hrefRange,
+                  let imgRange = imgRange,
+                  let titleRange = titleRange else { continue }
+            
+            let href = String(html[hrefRange])
+            let imgSrc = String(html[imgRange])
+            let title = String(html[titleRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Extract video URL from href
+            let videoURL = extractVideoURL(from: href)
+            let thumbnailURL = URL(string: imgSrc)
+            
+            if let videoURL = videoURL, let thumbnailURL = thumbnailURL {
+                let wallpaper = Wallpaper(
+                    title: title,
+                    thumbnailURL: thumbnailURL,
+                    videoURL: videoURL,
+                    duration: nil,
+                    resolution: nil
+                )
+                wallpapers.append(wallpaper)
             }
         }
         
         return wallpapers
     }
     
-    // MARK: - Construct Video URL from Thumbnail
-    private func constructVideoURL(from thumbnailURL: URL) -> URL? {
-        let urlString = thumbnailURL.absoluteString
-        
-        // Common patterns:
-        // thumbnail: https://example.com/thumbnails/video1.jpg
-        // video: https://example.com/videos/video1.mp4
-        
-        let replacements = [
-            ("/thumbnails/", "/videos/"),
-            ("/thumbs/", "/videos/"),
-            ("/preview/", "/video/"),
-            (".jpg", ".mp4"),
-            (".png", ".mp4"),
-            (".jpeg", ".mp4"),
-            (".webp", ".mp4"),
-            ("_thumb", ""),
-            ("_preview", ""),
-            ("-thumb", ""),
-            ("-preview", "")
-        ]
-        
-        var videoString = urlString
-        for (pattern, replacement) in replacements {
-            videoString = videoString.replacingOccurrences(of: pattern, with: replacement)
-        }
-        
-        return URL(string: videoString)
+    // MARK: - Extract Video URL
+    private func extractVideoURL(from href: String) -> URL? {
+        // This would extract the actual video URL from the href
+        // For now, return a placeholder - this needs to be implemented based on actual wallsflow structure
+        return URL(string: "\(baseURL)\(href)")
     }
     
     // MARK: - Download Video
     func downloadVideo(from url: URL, to destinationURL: URL) async throws -> Progress {
         let progress = Progress(totalUnitCount: 100)
         
-        var observation: NSKeyValueObservation?
-        
-        let task = session.downloadTask(with: url) { [weak self] tempURL, response, error in
-            observation?.invalidate()
-            
-            guard let self = self else { return }
-            
-            if let error = error {
-                Task { @MainActor in
-                    self.errorMessage = error.localizedDescription
-                }
+        let task = session.downloadTask(with: url) { tempURL, response, error in
+            guard let tempURL = tempURL, error == nil else {
+                progress.completedUnitCount = 0
                 return
             }
             
-            guard let tempURL = tempURL else { return }
-            
             do {
-                // Create directory if needed
                 let directory = destinationURL.deletingLastPathComponent()
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 
-                // Move file to destination
                 if FileManager.default.fileExists(atPath: destinationURL.path) {
                     try FileManager.default.removeItem(at: destinationURL)
                 }
                 
                 try FileManager.default.moveItem(at: tempURL, to: destinationURL)
-                
-                Task { @MainActor in
-                    progress.completedUnitCount = 100
-                }
+                progress.completedUnitCount = 100
             } catch {
-                Task { @MainActor in
-                    self.errorMessage = error.localizedDescription
-                }
-            }
-        }
-        
-        observation = task.progress.observe(\.fractionCompleted) { taskProgress, _ in
-            Task { @MainActor in
-                progress.completedUnitCount = Int64(taskProgress.fractionCompleted * 100)
+                progress.completedUnitCount = 0
             }
         }
         
@@ -310,17 +234,11 @@ class NetworkManager: ObservableObject {
     // MARK: - Download Thumbnail
     func downloadThumbnail(from url: URL) async throws -> URL {
         let (tempURL, _) = try await session.download(from: url)
+        let documentsPath = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentsPath.appendingPathComponent("thumbnails/\(UUID().uuidString).jpg")
         
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let thumbnailsPath = documentsPath.appendingPathComponent("VideoWallpaper/Thumbnails")
-        
-        try FileManager.default.createDirectory(at: thumbnailsPath, withIntermediateDirectories: true)
-        
-        let destinationURL = thumbnailsPath.appendingPathComponent(url.lastPathComponent)
-        
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            try FileManager.default.removeItem(at: destinationURL)
-        }
+        let directory = destinationURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
         

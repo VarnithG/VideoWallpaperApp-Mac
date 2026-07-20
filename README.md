@@ -67,15 +67,45 @@ VideoWallpaperApp/
 
 ### Permissions Required
 
-The app requires the following macOS permissions:
+The app requires the following macOS permissions for full functionality:
 
-1. **Accessibility**: For desktop wallpaper control
-   - System Preferences > Security & Privacy > Privacy > Accessibility
-   - Enable "Video Wallpaper"
+#### 1. Accessibility Permission (Required for Desktop Wallpaper)
+- **Why**: The app needs accessibility permission to display windows on your desktop behind other windows
+- **How to enable**:
+  1. Go to System Preferences > Security & Privacy > Privacy > Accessibility
+  2. Click the lock icon to make changes (requires admin password)
+  3. Add "VideoWallpaperApp" to the list or check the box if already present
+  4. Restart the app after enabling
 
-2. **Full Disk Access**: For lock screen modification (optional)
-   - System Preferences > Security & Privacy > Privacy > Full Disk Access
-   - Enable "Video Wallpaper"
+#### 2. Full Disk Access (Required for Screen Saver and Lock Screen)
+- **Why**: The app needs access to system folders to install screen saver and lock screen files
+- **How to enable**:
+  1. Go to System Preferences > Security & Privacy > Privacy > Full Disk Access
+  2. Click the lock icon to make changes (requires admin password)
+  3. Add "VideoWallpaperApp" to the list or check the box if already present
+  4. Restart the app after enabling
+
+#### 3. Internet Access (Required for Downloading Wallpapers)
+- **Why**: The app needs internet access to download wallpapers from wallsflow.com
+- **How to enable**:
+  1. Go to System Preferences > Security & Privacy > Privacy > Outgoing Connections
+  2. Click the lock icon to make changes (requires admin password)
+  3. Add "VideoWallpaperApp" to the list or check the box if already present
+  4. Most apps have this enabled by default
+
+#### 4. Notification Permissions (Optional)
+- **Why**: The app can send notifications when wallpapers are set
+- **How to enable**:
+  1. Go to System Preferences > Notifications
+  2. Find VideoWallpaperApp in the list
+  3. Enable notifications if desired
+
+#### First Launch Setup
+When you first launch the app, you may see prompts for these permissions. Make sure to:
+- Click "Open System Preferences" when prompted
+- Follow the steps above for each permission
+- Restart the app after granting permissions
+- If prompts don't appear, manually enable them in System Preferences
 
 ## Usage
 

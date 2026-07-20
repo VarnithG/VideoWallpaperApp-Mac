@@ -13,56 +13,26 @@ struct ContentView: View {
     @State private var showingPreview = false
     @State private var showingSettings = false
     @State private var downloadedWallpapers: [Wallpaper] = []
-    @State private var selectedTab: AppTab = .gallery
+    @State private var selectedSection: WebsiteSection?
+    @State private var showingError = false
     @State private var errorMessage: String?
     
     private let gridItemLayout = [
         GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)
     ]
     
-    enum AppTab: String, CaseIterable {
-        case gallery = "Gallery"
-        case history = "History"
-    }
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerView
+        HStack(spacing: 0) {
+            // Sidebar
+            sidebarView
             
-            // Tab Bar
-            tabBarView
-            
-            // Content
-            Group {
-                switch selectedTab {
-                case .gallery:
-                    galleryView
-                case .history:
-                    WallpaperHistoryView()
-                }
-            }
+            // Main Content
+            mainContentView
         }
         .onAppear {
-            // Load wallpapers on app launch
+            // Load trending wallpapers on app launch
             Task {
-                await loadSampleWallpapers()
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showingSettings = true }) {
-                    Image(systemName: "gearshape")
-                }
-            }
-            
-            ToolbarItem(placement: .cancellationAction) {
-                Button(action: {
-                    NSApplication.shared.terminate(nil)
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                }
-                .help("Quit App")
+                await loadTrendingWallpapers()
             }
         }
         .sheet(item: $selectedWallpaper) { wallpaper in
@@ -71,60 +41,98 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
+        .alert("Error", isPresented: $showingError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+            }
+        }
     }
     
-    // MARK: - Header View
-    private var headerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Video Wallpaper")
-                    .font(.system(size: 24, weight: .bold))
+    // MARK: - Sidebar View
+    private var sidebarView: some View {
+        VStack(spacing: 0) {
+            // Logo/Header
+            VStack(spacing: 8) {
+                Image(systemName: "video.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(.blue)
                 
-                Text("Transform your desktop with live wallpapers")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
+                Text("Wallsflow")
+                    .font(.system(size: 18, weight: .bold))
+            }
+            .padding(.vertical, 20)
+            
+            Divider()
+            
+            // Sections
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(networkManager.sections) { section in
+                        Button(action: {
+                            selectedSection = section
+                            Task {
+                                await loadSectionWallpapers(section)
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                Text(section.name)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(selectedSection?.id == section.id ? .white : .primary)
+                                
+                                Spacer()
+                                
+                                if selectedSection?.id == section.id {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(selectedSection?.id == section.id ? Color.blue : Color.clear)
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
             }
             
             Spacer()
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
-    }
-    
-    // MARK: - Tab Bar View
-    private var tabBarView: some View {
-        HStack(spacing: 0) {
-            ForEach(AppTab.allCases, id: \.self) { tab in
-                Button(action: {
-                    selectedTab = tab
-                }) {
-                    VStack(spacing: 6) {
-                        Image(systemName: tab == .gallery ? "photo.on.rectangle.angled" : "clock.arrow.circlepath")
-                            .font(.system(size: 18))
-                        
-                        Text(tab.rawValue)
-                            .font(.system(size: 11, weight: .medium))
+            
+            // Search in sidebar
+            VStack(spacing: 12) {
+                TextField("Search...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        Task {
+                            await searchWallpapers()
+                        }
                     }
-                    .foregroundColor(selectedTab == tab ? .blue : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(selectedTab == tab ? Color.blue.opacity(0.1) : Color.clear)
+                
+                Button(action: {
+                    Task {
+                        await searchWallpapers()
+                    }
+                }) {
+                    Text("Search")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderedProminent)
             }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 20)
         }
-        .overlay(
-            Divider(),
-            alignment: .bottom
-        )
+        .frame(width: 200)
+        .background(Color(NSColor.controlBackgroundColor))
     }
     
-    // MARK: - Gallery View
-    private var galleryView: some View {
+    // MARK: - Main Content View
+    private var mainContentView: some View {
         VStack(spacing: 0) {
-            // Search Bar
-            searchBarView
+            // Header
+            headerView
             
             // Content
             if networkManager.isLoading {
@@ -135,6 +143,40 @@ struct ContentView: View {
                 wallpaperGridView
             }
         }
+    }
+    
+    // MARK: - Header View
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(selectedSection?.name ?? "Video Wallpaper")
+                    .font(.system(size: 24, weight: .bold))
+                
+                Text("\(networkManager.wallpapers.count) wallpapers")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                Button(action: { showingSettings = true }) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                
+                Button(action: {
+                    NSApplication.shared.terminate(nil)
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
     
     // MARK: - Loading View
@@ -158,90 +200,15 @@ struct ContentView: View {
                 .foregroundColor(.secondary.opacity(0.5))
             
             VStack(spacing: 8) {
-                Text("Find Your Perfect Wallpaper")
+                Text("No wallpapers found")
                     .font(.system(size: 18, weight: .semibold))
                 
-                Text("Search for live wallpapers from Wallsflow")
+                Text("Select a section from the sidebar or search for wallpapers")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
-            }
-            
-            if !downloadedWallpapers.isEmpty {
-                Divider()
-                    .padding(.vertical, 8)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Your Downloads")
-                        .font(.system(size: 16, weight: .semibold))
-                    
-                    ScrollView {
-                        LazyVGrid(columns: gridItemLayout, spacing: 16) {
-                            ForEach(downloadedWallpapers) { wallpaper in
-                                WallpaperGridItem(wallpaper: wallpaper)
-                                    .onTapGesture {
-                                        selectedWallpaper = wallpaper
-                                    }
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-    }
-    
-    // MARK: - Search Bar View
-    private var searchBarView: some View {
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 14))
-                
-                TextField("Search wallpapers...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .onSubmit {
-                        Task {
-                            await searchWallpapers()
-                        }
-                    }
-                
-                if !searchText.isEmpty {
-                    Button(action: {
-                        searchText = ""
-                        Task {
-                            await loadSampleWallpapers()
-                        }
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 14))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-            
-            Button(action: {
-                Task {
-                    await searchWallpapers()
-                }
-            }) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(.blue)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
     }
     
     // MARK: - Wallpaper Grid View
@@ -260,29 +227,47 @@ struct ContentView: View {
         }
     }
     
+    // MARK: - Load Trending Wallpapers
+    private func loadTrendingWallpapers() async {
+        guard let trendingSection = networkManager.sections.first else { return }
+        selectedSection = trendingSection
+        
+        do {
+            _ = try await networkManager.fetchSectionWallpapers(section: trendingSection)
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+    
+    // MARK: - Load Section Wallpapers
+    private func loadSectionWallpapers(_ section: WebsiteSection) async {
+        do {
+            _ = try await networkManager.fetchSectionWallpapers(section: section)
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+    
     // MARK: - Search Wallpapers
     private func searchWallpapers() async {
         guard !searchText.isEmpty else { return }
         
+        selectedSection = nil
+        
         do {
             _ = try await networkManager.searchWallpapers(query: searchText)
         } catch {
-            networkManager.errorMessage = error.localizedDescription
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
         }
-    }
-    
-    // MARK: - Load Sample Wallpapers
-    private func loadSampleWallpapers() async {
-        do {
-            _ = try await networkManager.searchWallpapers(query: "nature")
-        } catch {
-            print("Error loading sample wallpapers: \(error)")
-        }
-    }
-    
-    // MARK: - Load Downloaded Wallpapers
-    private func loadDownloadedWallpapers() {
-        downloadedWallpapers = wallpaperManager.getDownloadedWallpapers()
     }
 }
 
@@ -294,7 +279,7 @@ struct WallpaperGridItem: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail - simple placeholder for now
+            // Thumbnail
             ZStack {
                 if let image = thumbnailImage {
                     Image(nsImage: image)
@@ -322,7 +307,7 @@ struct WallpaperGridItem: View {
             }
             .cornerRadius(8)
             .onAppear {
-                loadVideoThumbnail()
+                loadThumbnail()
             }
             
             // Info
@@ -351,38 +336,22 @@ struct WallpaperGridItem: View {
         .shadow(radius: 2)
     }
     
-    private func loadVideoThumbnail() {
-        // For now, create a simple colored placeholder
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            let size = NSSize(width: 200, height: 140)
-            let image = NSImage(size: size)
-            image.lockFocus()
-            
-            // Create gradient background
-            let gradient = NSGradient(colors: [
-                NSColor.blue,
-                NSColor.purple
-            ])
-            gradient?.draw(in: NSRect(origin: .zero, size: size), angle: 45)
-            
-            // Add play icon
-            let playSize: CGFloat = 30
-            let centerX = size.width / 2
-            let centerY = size.height / 2
-            
-            let playPath = NSBezierPath()
-            playPath.move(to: NSPoint(x: centerX - playSize * 0.3, y: centerY - playSize))
-            playPath.line(to: NSPoint(x: centerX - playSize * 0.3, y: centerY + playSize))
-            playPath.line(to: NSPoint(x: centerX + playSize * 0.5, y: centerY))
-            playPath.close()
-            
-            NSColor.white.setFill()
-            playPath.fill()
-            
-            image.unlockFocus()
-            
-            self.thumbnailImage = image
-            self.isLoading = false
+    private func loadThumbnail() {
+        Task {
+            do {
+                let localURL = try await NetworkManager.shared.downloadThumbnail(from: wallpaper.thumbnailURL)
+                
+                if let image = NSImage(contentsOf: localURL) {
+                    await MainActor.run {
+                        self.thumbnailImage = image
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
         }
     }
 }
@@ -502,7 +471,6 @@ struct WallpaperPreviewView: View {
     }
     
     private func setupPlayer() {
-        // Create player with the wallpaper's video URL
         let newPlayer = AVPlayer(url: wallpaper.videoURL)
         self.player = newPlayer
         isPlaying = true
@@ -576,20 +544,16 @@ struct WallpaperPreviewView: View {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let destinationURL = documentsPath.appendingPathComponent("VideoWallpaper/Videos/\(wallpaper.id).mp4")
         
-        // Create directory if needed
         let directory = destinationURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         
-        // Download the file directly
         let (tempURL, response) = try await URLSession.shared.download(from: wallpaper.videoURL)
         
-        // Check if download was successful
         guard let httpResponse = response as? HTTPURLResponse,
               httpResponse.statusCode == 200 else {
             throw NetworkError.downloadFailed
         }
         
-        // Move file to destination
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             try FileManager.default.removeItem(at: destinationURL)
         }
@@ -609,23 +573,19 @@ struct VideoPlayerView: NSViewRepresentable {
         let view = NSView()
         view.wantsLayer = true
         
-        // Create AVPlayerLayer
         let playerLayer = AVPlayerLayer(player: player)
         playerLayer.videoGravity = .resizeAspectFill
         playerLayer.frame = view.bounds
         view.layer?.addSublayer(playerLayer)
         
-        // Store player layer in context for updates
         context.coordinator.playerLayer = playerLayer
         
         return view
     }
     
     func updateNSView(_ nsView: NSView, context: Context) {
-        // Update frame
         context.coordinator.playerLayer?.frame = nsView.bounds
         
-        // Handle play/pause
         if isPlaying {
             player?.play()
         } else {
@@ -649,7 +609,6 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Settings")
                     .font(.system(size: 20, weight: .bold))
@@ -667,7 +626,6 @@ struct SettingsView: View {
             
             Divider()
             
-            // Settings
             VStack(alignment: .leading, spacing: 20) {
                 Toggle("Mute wallpaper audio", isOn: $wallpaperManager.isMuted)
                 Toggle("Loop wallpapers", isOn: $wallpaperManager.shouldLoop)
