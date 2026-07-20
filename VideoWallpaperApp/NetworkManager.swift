@@ -30,16 +30,14 @@ struct Wallpaper: Identifiable, Codable, Hashable {
     let videoURL: URL
     let duration: String?
     let resolution: String?
-    let isLocal: Bool
     
-    init(id: String = UUID().uuidString, title: String, thumbnailURL: URL, videoURL: URL, duration: String? = nil, resolution: String? = nil, isLocal: Bool = false) {
+    init(id: String = UUID().uuidString, title: String, thumbnailURL: URL, videoURL: URL, duration: String? = nil, resolution: String? = nil) {
         self.id = id
         self.title = title
         self.thumbnailURL = thumbnailURL
         self.videoURL = videoURL
         self.duration = duration
         self.resolution = resolution
-        self.isLocal = isLocal
     }
 }
 
@@ -65,28 +63,38 @@ class NetworkManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let session = URLSession.shared
+    private let baseURL = "https://wallsflow.com"
     
     // Local downloads folder
     private var downloadsDirectory: URL {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let downloadsPath = documentsPath.appendingPathComponent("VideoWallpaper/Downloads")
         
-        // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(at: downloadsPath, withIntermediateDirectories: true)
         
         return downloadsPath
     }
     
-    // Sidebar sections
+    // Website sections from wallsflow.com
     let sections: [WebsiteSection] = [
-        WebsiteSection(id: "download", name: "Download Video", url: "download"),
-        WebsiteSection(id: "my_downloads", name: "My Downloads", url: "my_downloads")
+        WebsiteSection(id: "trending", name: "Trending", url: "/trending"),
+        WebsiteSection(id: "new", name: "New", url: "/new"),
+        WebsiteSection(id: "popular", name: "Popular", url: "/popular"),
+        WebsiteSection(id: "4k", name: "4K", url: "/4k"),
+        WebsiteSection(id: "anime", name: "Anime", url: "/anime"),
+        WebsiteSection(id: "cars", name: "Cars", url: "/cars"),
+        WebsiteSection(id: "nature", name: "Nature", url: "/nature"),
+        WebsiteSection(id: "abstract", name: "Abstract", url: "/abstract"),
+        WebsiteSection(id: "space", name: "Space", url: "/space"),
+        WebsiteSection(id: "gaming", name: "Gaming", url: "/gaming"),
+        WebsiteSection(id: "cities", name: "Cities", url: "/cities"),
+        WebsiteSection(id: "minimal", name: "Minimal", url: "/minimal")
     ]
     
     private init() {}
     
-    // MARK: - Download Video from URL
-    func downloadVideo(from urlString: String, title: String) async throws -> Wallpaper {
+    // MARK: - Fetch Section Wallpapers
+    func fetchSectionWallpapers(section: WebsiteSection) async throws -> [Wallpaper] {
         isLoading = true
         errorMessage = nil
         
@@ -94,10 +102,123 @@ class NetworkManager: ObservableObject {
             isLoading = false
         }
         
+        let urlString = "\(baseURL)\(section.url)"
         guard let url = URL(string: urlString) else {
             throw NetworkError.invalidURL
         }
         
+        let (data, _) = try await session.data(from: url)
+        guard let htmlString = String(data: data, encoding: .utf8) else {
+            throw NetworkError.decodingFailed
+        }
+        
+        let wallpapers = parseWallpapersFromHTML(htmlString)
+        
+        if wallpapers.isEmpty {
+            throw NetworkError.noResultsFound
+        }
+        
+        self.wallpapers = wallpapers
+        
+        return wallpapers
+    }
+    
+    // MARK: - Search Wallpapers
+    func searchWallpapers(query: String) async throws -> [Wallpaper] {
+        isLoading = true
+        errorMessage = nil
+        
+        defer {
+            isLoading = false
+        }
+        
+        let urlString = "\(baseURL)/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)"
+        guard let url = URL(string: urlString) else {
+            throw NetworkError.invalidURL
+        }
+        
+        let (data, _) = try await session.data(from: url)
+        guard let htmlString = String(data: data, encoding: .utf8) else {
+            throw NetworkError.decodingFailed
+        }
+        
+        let wallpapers = parseWallpapersFromHTML(htmlString)
+        
+        if wallpapers.isEmpty {
+            throw NetworkError.noResultsFound
+        }
+        
+        self.wallpapers = wallpapers
+        
+        return wallpapers
+    }
+    
+    // MARK: - Parse Wallpapers from HTML
+    private func parseWallpapersFromHTML(_ html: String) -> [Wallpaper] {
+        var wallpapers: [Wallpaper] = []
+        
+        // Simplified parsing - look for video URLs in the HTML
+        // This is a basic implementation that can be enhanced
+        
+        // Look for .mp4 URLs
+        let mp4Pattern = #"https?://[^\s"']+\.mp4"#
+        guard let regex = try? NSRegularExpression(pattern: mp4Pattern, options: [.caseInsensitive]) else {
+            return []
+        }
+        
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        let matches = regex.matches(in: html, options: [], range: range)
+        
+        var usedURLs = Set<String>()
+        
+        for match in matches {
+            guard let urlRange = Range(match.range, in: html) else { continue }
+            let urlString = String(html[urlRange])
+            
+            // Avoid duplicates
+            if usedURLs.contains(urlString) { continue }
+            usedURLs.insert(urlString)
+            
+            guard let videoURL = URL(string: urlString) else { continue }
+            
+            // Create a thumbnail URL (using the same URL for now)
+            let thumbnailURL = videoURL
+            
+            // Generate a title from the URL
+            let title = generateTitle(from: urlString)
+            
+            let wallpaper = Wallpaper(
+                title: title,
+                thumbnailURL: thumbnailURL,
+                videoURL: videoURL,
+                duration: nil,
+                resolution: nil
+            )
+            
+            wallpapers.append(wallpaper)
+            
+            // Limit to prevent too many results
+            if wallpapers.count >= 12 { break }
+        }
+        
+        return wallpapers
+    }
+    
+    // MARK: - Generate Title from URL
+    private func generateTitle(from url: String) -> String {
+        // Extract filename from URL and clean it up
+        let components = url.components(separatedBy: "/")
+        if let filename = components.last {
+            let name = filename.replacingOccurrences(of: ".mp4", with: "")
+                .replacingOccurrences(of: "_", with: " ")
+                .replacingOccurrences(of: "-", with: " ")
+            return name.capitalized
+        }
+        return "Wallpaper"
+    }
+    
+    // MARK: - Download Video
+    func downloadVideo(from url: URL, to destinationURL: URL) async throws {
         let (tempURL, response) = try await session.download(from: url)
         
         guard let httpResponse = response as? HTTPURLResponse,
@@ -105,80 +226,31 @@ class NetworkManager: ObservableObject {
             throw NetworkError.downloadFailed
         }
         
-        // Create destination file
-        let fileName = "\(title.replacingOccurrences(of: " ", with: "_")).mp4"
-        let destinationURL = downloadsDirectory.appendingPathComponent(fileName)
+        let directory = destinationURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         
-        // Remove existing file if present
         if FileManager.default.fileExists(atPath: destinationURL.path) {
             try FileManager.default.removeItem(at: destinationURL)
         }
         
-        // Move downloaded file
+        try FileManager.default.moveItem(at: tempURL, to: destinationURL)
+    }
+    
+    // MARK: - Download Thumbnail
+    func downloadThumbnail(from url: URL) async throws -> URL {
+        let (tempURL, _) = try await session.download(from: url)
+        let documentsPath = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentsPath.appendingPathComponent("thumbnails/\(UUID().uuidString).jpg")
+        
+        let directory = destinationURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
         
-        // Create wallpaper object
-        let wallpaper = Wallpaper(
-            title: title,
-            thumbnailURL: destinationURL, // Use video as thumbnail for now
-            videoURL: destinationURL,
-            duration: nil,
-            resolution: nil,
-            isLocal: true
-        )
-        
-        return wallpaper
+        return destinationURL
     }
     
-    // MARK: - Load Local Downloads
-    func loadLocalDownloads() -> [Wallpaper] {
-        isLoading = true
-        errorMessage = nil
-        
-        defer {
-            isLoading = false
-        }
-        
-        var localWallpapers: [Wallpaper] = []
-        
-        do {
-            let files = try FileManager.default.contentsOfDirectory(at: downloadsDirectory, includingPropertiesForKeys: nil)
-            
-            for file in files where file.pathExtension == "mp4" {
-                let title = file.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "_", with: " ")
-                let wallpaper = Wallpaper(
-                    title: title,
-                    thumbnailURL: file,
-                    videoURL: file,
-                    duration: nil,
-                    resolution: nil,
-                    isLocal: true
-                )
-                localWallpapers.append(wallpaper)
-            }
-            
-            self.wallpapers = localWallpapers
-            
-        } catch {
-            errorMessage = "Failed to load downloads: \(error.localizedDescription)"
-        }
-        
-        return localWallpapers
-    }
-    
-    // MARK: - Delete Downloaded Wallpaper
-    func deleteWallpaper(_ wallpaper: Wallpaper) throws {
-        guard wallpaper.isLocal else {
-            throw NetworkError.downloadFailed
-        }
-        
-        try FileManager.default.removeItem(at: wallpaper.videoURL)
-        
-        // Reload downloads
-        _ = loadLocalDownloads()
-    }
-    
-    // MARK: - Get Download Directory
+    // MARK: - Get Downloads Directory
     func getDownloadsDirectory() -> URL {
         return downloadsDirectory
     }

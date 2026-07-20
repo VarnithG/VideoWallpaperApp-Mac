@@ -8,16 +8,13 @@ struct ContentView: View {
     @StateObject private var networkManager = NetworkManager.shared
     @StateObject private var wallpaperManager = WallpaperManager.shared
     
-    @State private var videoURL = ""
-    @State private var videoTitle = ""
+    @State private var searchText = ""
     @State private var selectedWallpaper: Wallpaper?
     @State private var showingPreview = false
     @State private var showingSettings = false
     @State private var selectedSection: WebsiteSection?
     @State private var showingError = false
     @State private var errorMessage: String?
-    @State private var isDownloading = false
-    @State private var downloadProgress: Double = 0
     
     private let gridItemLayout = [
         GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 16)
@@ -32,9 +29,9 @@ struct ContentView: View {
             mainContentView
         }
         .onAppear {
-            // Load local downloads on app launch
+            // Load trending wallpapers on app launch
             Task {
-                networkManager.loadLocalDownloads()
+                await loadTrendingWallpapers()
             }
         }
         .sheet(item: $selectedWallpaper) { wallpaper in
@@ -61,7 +58,7 @@ struct ContentView: View {
                     .font(.system(size: 24))
                     .foregroundColor(.blue)
                 
-                Text("Video Wallpaper")
+                Text("Wallsflow")
                     .font(.system(size: 18, weight: .bold))
             }
             .padding(.vertical, 20)
@@ -69,62 +66,64 @@ struct ContentView: View {
             Divider()
             
             // Sections
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(networkManager.sections) { section in
-                    Button(action: {
-                        selectedSection = section
-                        handleSectionSelection(section)
-                    }) {
-                        HStack(spacing: 12) {
-                            Image(systemName: section.id == "download" ? "arrow.down.circle" : "folder.fill")
-                                .font(.system(size: 16))
-                            
-                            Text(section.name)
-                                .font(.system(size: 14))
-                                .foregroundColor(selectedSection?.id == section.id ? .white : .primary)
-                            
-                            Spacer()
-                            
-                            if selectedSection?.id == section.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.white)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(networkManager.sections) { section in
+                        Button(action: {
+                            selectedSection = section
+                            Task {
+                                await loadSectionWallpapers(section)
                             }
+                        }) {
+                            HStack(spacing: 12) {
+                                Text(section.name)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(selectedSection?.id == section.id ? .white : .primary)
+                                
+                                Spacer()
+                                
+                                if selectedSection?.id == section.id {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .background(selectedSection?.id == section.id ? Color.blue : Color.clear)
+                            .cornerRadius(8)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(selectedSection?.id == section.id ? Color.blue : Color.clear)
-                        .cornerRadius(8)
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 8)
             }
-            .padding(.horizontal, 8)
             
             Spacer()
             
-            // Downloads folder info
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Downloads Folder:")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                
-                Text(networkManager.getDownloadsDirectory().path)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
+            // Search in sidebar
+            VStack(spacing: 12) {
+                TextField("Search...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        Task {
+                            await searchWallpapers()
+                        }
+                    }
                 
                 Button(action: {
-                    NSWorkspace.shared.open(networkManager.getDownloadsDirectory())
+                    Task {
+                        await searchWallpapers()
+                    }
                 }) {
-                    Text("Open Folder")
-                        .font(.system(size: 11))
+                    Text("Search")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.borderedProminent)
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 20)
         }
-        .frame(width: 220)
+        .frame(width: 200)
         .background(Color(NSColor.controlBackgroundColor))
     }
     
@@ -135,8 +134,10 @@ struct ContentView: View {
             headerView
             
             // Content
-            if selectedSection?.id == "download" {
-                downloadView
+            if networkManager.isLoading {
+                loadingView
+            } else if networkManager.wallpapers.isEmpty {
+                emptyStateView
             } else {
                 wallpaperGridView
             }
@@ -177,113 +178,6 @@ struct ContentView: View {
         .padding(.vertical, 16)
     }
     
-    // MARK: - Download View
-    private var downloadView: some View {
-        VStack(spacing: 24) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Download Video")
-                    .font(.system(size: 20, weight: .bold))
-                
-                Text("Enter a direct video URL to download")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Video URL")
-                        .font(.system(size: 13, weight: .medium))
-                    
-                    TextField("https://example.com/video.mp4", text: $videoURL)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Title")
-                        .font(.system(size: 13, weight: .medium))
-                    
-                    TextField("My Wallpaper", text: $videoTitle)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                Button(action: {
-                    Task {
-                        await downloadVideo()
-                    }
-                }) {
-                    HStack {
-                        if isDownloading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                            Text("Downloading...")
-                        } else {
-                            Image(systemName: "arrow.down.circle.fill")
-                            Text("Download Video")
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .disabled(videoURL.isEmpty || videoTitle.isEmpty || isDownloading)
-            }
-            .padding(24)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(12)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Popular Video Sources:")
-                    .font(.system(size: 13, weight: .medium))
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("• Direct MP4 files from any website")
-                    Text("• Your own video files")
-                    Text("• Public domain videos")
-                }
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-        .padding(24)
-    }
-    
-    // MARK: - Wallpaper Grid View
-    private var wallpaperGridView: some View {
-        VStack(spacing: 0) {
-            if networkManager.isLoading {
-                loadingView
-            } else if networkManager.wallpapers.isEmpty {
-                emptyStateView
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: gridItemLayout, spacing: 16) {
-                        ForEach(networkManager.wallpapers) { wallpaper in
-                            WallpaperGridItem(wallpaper: wallpaper)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        try? networkManager.deleteWallpaper(wallpaper)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
-                                .onTapGesture {
-                                    selectedWallpaper = wallpaper
-                                }
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
-                }
-            }
-        }
-    }
-    
     // MARK: - Loading View
     private var loadingView: some View {
         VStack(spacing: 16) {
@@ -300,15 +194,15 @@ struct ContentView: View {
     // MARK: - Empty State View
     private var emptyStateView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "folder.badge.questionmark")
+            Image(systemName: "photo.on.rectangle.angled")
                 .font(.system(size: 40))
                 .foregroundColor(.secondary.opacity(0.5))
             
             VStack(spacing: 8) {
-                Text("No wallpapers downloaded")
+                Text("No wallpapers found")
                     .font(.system(size: 18, weight: .semibold))
                 
-                Text("Download videos from the Download section")
+                Text("Select a section from the sidebar or search for wallpapers")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
@@ -316,38 +210,61 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    // MARK: - Handle Section Selection
-    private func handleSectionSelection(_ section: WebsiteSection) {
-        if section.id == "my_downloads" {
-            _ = networkManager.loadLocalDownloads()
+    // MARK: - Wallpaper Grid View
+    private var wallpaperGridView: some View {
+        ScrollView {
+            LazyVGrid(columns: gridItemLayout, spacing: 16) {
+                ForEach(networkManager.wallpapers) { wallpaper in
+                    WallpaperGridItem(wallpaper: wallpaper)
+                        .onTapGesture {
+                            selectedWallpaper = wallpaper
+                        }
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
         }
     }
     
-    // MARK: - Download Video
-    private func downloadVideo() async {
-        guard !videoURL.isEmpty, !videoTitle.isEmpty else { return }
-        
-        isDownloading = true
+    // MARK: - Load Trending Wallpapers
+    private func loadTrendingWallpapers() async {
+        guard let trendingSection = networkManager.sections.first else { return }
+        selectedSection = trendingSection
         
         do {
-            _ = try await networkManager.downloadVideo(from: videoURL, title: videoTitle)
-            
-            await MainActor.run {
-                // Clear form
-                videoURL = ""
-                videoTitle = ""
-                
-                // Switch to downloads view
-                selectedSection = networkManager.sections.first(where: { $0.id == "my_downloads" })
-                _ = networkManager.loadLocalDownloads()
-                
-                isDownloading = false
-            }
+            _ = try await networkManager.fetchSectionWallpapers(section: trendingSection)
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
                 showingError = true
-                isDownloading = false
+            }
+        }
+    }
+    
+    // MARK: - Load Section Wallpapers
+    private func loadSectionWallpapers(_ section: WebsiteSection) async {
+        do {
+            _ = try await networkManager.fetchSectionWallpapers(section: section)
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
+            }
+        }
+    }
+    
+    // MARK: - Search Wallpapers
+    private func searchWallpapers() async {
+        guard !searchText.isEmpty else { return }
+        
+        selectedSection = nil
+        
+        do {
+            _ = try await networkManager.searchWallpapers(query: searchText)
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showingError = true
             }
         }
     }
@@ -399,19 +316,17 @@ struct WallpaperGridItem: View {
                     .lineLimit(1)
                     
                 HStack(spacing: 4) {
-                    Text(wallpaper.duration ?? "Local")
+                    Text(wallpaper.duration ?? "Online")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                     
-                    if wallpaper.isLocal {
-                        Text("•")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                        
-                        Text("Downloaded")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Text(wallpaper.resolution ?? "HD")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -421,9 +336,21 @@ struct WallpaperGridItem: View {
     }
     
     private func loadThumbnail() {
-        // For local files, just show a placeholder since we can't generate thumbnails easily
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.isLoading = false
+        Task {
+            do {
+                let localURL = try await NetworkManager.shared.downloadThumbnail(from: wallpaper.thumbnailURL)
+                
+                if let image = NSImage(contentsOf: localURL) {
+                    await MainActor.run {
+                        self.thumbnailImage = image
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
         }
     }
 }
@@ -434,6 +361,8 @@ struct WallpaperPreviewView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var wallpaperManager = WallpaperManager.shared
     
+    @State private var isDownloading = false
+    @State private var downloadProgress: Double = 0
     @State private var isPlaying = false
     @State private var player: AVPlayer?
     @State private var errorMessage: String?
@@ -457,11 +386,11 @@ struct WallpaperPreviewView: View {
                         .font(.system(size: 20, weight: .bold))
                     
                     HStack(spacing: 16) {
-                        Label(wallpaper.duration ?? "Local", systemImage: "clock")
+                        Label(wallpaper.duration ?? "Online", systemImage: "clock")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                         
-                        Label(wallpaper.resolution ?? "1080p", systemImage: "display")
+                        Label(wallpaper.resolution ?? "HD", systemImage: "display")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -485,6 +414,7 @@ struct WallpaperPreviewView: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .disabled(isDownloading)
                     
                     Button(action: {
                         setAsScreenSaver()
@@ -499,6 +429,7 @@ struct WallpaperPreviewView: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .disabled(isDownloading)
                     
                     Button(action: {
                         setAsLockScreen()
@@ -513,6 +444,16 @@ struct WallpaperPreviewView: View {
                         .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .disabled(isDownloading)
+                    
+                    if isDownloading {
+                        ProgressView(value: downloadProgress)
+                            .progressViewStyle(LinearProgressViewStyle())
+                        
+                        Text("Downloading... \(Int(downloadProgress * 100))%")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
                     
                     if let errorMessage = errorMessage {
                         Text(errorMessage)
@@ -535,19 +476,79 @@ struct WallpaperPreviewView: View {
     }
     
     private func setAsDesktopWallpaper() {
-        wallpaperManager.setDesktopWallpaper(url: wallpaper.videoURL, wallpaper: wallpaper)
-        dismiss()
+        isDownloading = true
+        downloadProgress = 0
+        
+        Task {
+            do {
+                let localURL = try await downloadVideo()
+                
+                await MainActor.run {
+                    wallpaperManager.setDesktopWallpaper(url: localURL, wallpaper: wallpaper)
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
+                }
+            }
+        }
     }
     
     private func setAsScreenSaver() {
-        wallpaperManager.setScreenSaver(url: wallpaper.videoURL, wallpaper: wallpaper)
-        dismiss()
+        isDownloading = true
+        downloadProgress = 0
+        
+        Task {
+            do {
+                let localURL = try await downloadVideo()
+                
+                await MainActor.run {
+                    wallpaperManager.setScreenSaver(url: localURL, wallpaper: wallpaper)
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
+                }
+            }
+        }
     }
     
     private func setAsLockScreen() {
-        let lockScreenManager = LockScreenManager.shared
-        lockScreenManager.setLockScreenVideo(url: wallpaper.videoURL, wallpaper: wallpaper)
-        dismiss()
+        isDownloading = true
+        downloadProgress = 0
+        
+        Task {
+            do {
+                let localURL = try await downloadVideo()
+                
+                await MainActor.run {
+                    let lockScreenManager = LockScreenManager.shared
+                    lockScreenManager.setLockScreenVideo(url: localURL, wallpaper: wallpaper)
+                    dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isDownloading = false
+                    errorMessage = "Download failed: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    private func downloadVideo() async throws -> URL {
+        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentsPath.appendingPathComponent("VideoWallpaper/Videos/\(wallpaper.id).mp4")
+        
+        let directory = destinationURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        
+        try await NetworkManager.shared.downloadVideo(from: wallpaper.videoURL, to: destinationURL)
+        
+        return destinationURL
     }
 }
 
