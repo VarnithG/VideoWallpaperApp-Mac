@@ -65,15 +65,31 @@ struct ContentView: View {
                 .help("Quit App")
             }
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
-        }
         .sheet(item: $selectedWallpaper) { wallpaper in
             WallpaperPreviewView(wallpaper: wallpaper)
         }
-        .onAppear {
-            loadDownloadedWallpapers()
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
         }
+    }
+    
+    // MARK: - Header View
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Video Wallpaper")
+                    .font(.system(size: 24, weight: .bold))
+                
+                Text("Transform your desktop with live wallpapers")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
     }
     
     // MARK: - Tab Bar View
@@ -121,41 +137,59 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Header View
-    private var headerView: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Video Wallpaper")
-                    .font(.system(size: 32, weight: .bold, design: .default))
-                    .foregroundColor(.primary)
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+            
+            Text("Loading wallpapers...")
+                .font(.system(size: 14))
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    // MARK: - Empty State View
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary.opacity(0.5))
+            
+            VStack(spacing: 8) {
+                Text("Find Your Perfect Wallpaper")
+                    .font(.system(size: 18, weight: .semibold))
                 
-                Text("Beautiful live wallpapers for your Mac")
-                    .font(.system(size: 14, weight: .regular, design: .default))
+                Text("Search for live wallpapers from Wallsflow")
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
             
-            Spacer()
-            
-            // Active wallpaper indicator
-            if wallpaperManager.currentWallpaper != nil {
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 8, height: 8)
+            if !downloadedWallpapers.isEmpty {
+                Divider()
+                    .padding(.vertical, 8)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Your Downloads")
+                        .font(.system(size: 16, weight: .semibold))
                     
-                    Text("Active")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+                    ScrollView {
+                        LazyVGrid(columns: gridItemLayout, spacing: 16) {
+                            ForEach(downloadedWallpapers) { wallpaper in
+                                WallpaperGridItem(wallpaper: wallpaper)
+                                    .onTapGesture {
+                                        selectedWallpaper = wallpaper
+                                    }
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                    }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(12)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 24)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
     }
     
     // MARK: - Search Bar View
@@ -204,83 +238,10 @@ struct ContentView: View {
                     .foregroundColor(.blue)
             }
             .buttonStyle(.plain)
-            .disabled(searchText.isEmpty || networkManager.isLoading)
         }
         .padding(.horizontal, 24)
+        .padding(.top, 20)
         .padding(.bottom, 16)
-    }
-    
-    // MARK: - Loading View
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.2)
-            
-            Text("Searching for wallpapers...")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    // MARK: - Empty State View
-    private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary.opacity(0.5))
-            
-            VStack(spacing: 8) {
-                Text("Find Your Perfect Wallpaper")
-                    .font(.system(size: 18, weight: .semibold))
-                
-                Text("Search for live wallpapers from Wallsflow")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-            }
-            
-            if !downloadedWallpapers.isEmpty {
-                Divider()
-                    .padding(.vertical, 8)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Your Downloads")
-                        .font(.system(size: 16, weight: .semibold))
-                    
-                    ScrollView {
-                        LazyVGrid(columns: gridItemLayout, spacing: 16) {
-                            ForEach(downloadedWallpapers) { wallpaper in
-                                WallpaperGridItem(wallpaper: wallpaper)
-                                    .onTapGesture {
-                                        selectedWallpaper = wallpaper
-                                    }
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-    }
-    
-    // MARK: - No Results View
-    private var noResultsView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundColor(.secondary.opacity(0.5))
-            
-            Text("No wallpapers found")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.secondary)
-            
-            Text("Try a different search term")
-                .font(.system(size: 13))
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     // MARK: - Wallpaper Grid View
@@ -330,22 +291,23 @@ struct WallpaperGridItem: View {
     let wallpaper: Wallpaper
     @State private var thumbnailImage: NSImage?
     @State private var isLoading = true
-    @State private var player: AVPlayer?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail - using video preview
+            // Thumbnail - simple placeholder for now
             ZStack {
-                if let player = player {
-                    VideoPlayerView(player: player, isPlaying: .constant(true))
+                if let image = thumbnailImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
                         .frame(height: 140)
-                        .cornerRadius(8)
+                        .clipped()
                 } else if isLoading {
                     ProgressView()
                         .frame(height: 140)
                 } else {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.3))
+                        .fill(Color.blue.opacity(0.3))
                         .frame(height: 140)
                         .overlay(
                             VStack {
@@ -354,16 +316,13 @@ struct WallpaperGridItem: View {
                                 Text("Video")
                                     .font(.system(size: 12))
                             }
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.white)
                         )
                 }
             }
-            .clipped()
+            .cornerRadius(8)
             .onAppear {
-                loadVideoPreview()
-            }
-            .onDisappear {
-                player?.pause()
+                loadVideoThumbnail()
             }
             
             // Info
@@ -371,43 +330,58 @@ struct WallpaperGridItem: View {
                 Text(wallpaper.title)
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
-                
-                HStack(spacing: 8) {
-                    if let duration = wallpaper.duration {
-                        Text(duration)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
                     
-                    if let resolution = wallpaper.resolution {
-                        Text("•")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 11))
-                        
-                        Text(resolution)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
+                HStack(spacing: 4) {
+                    Text(wallpaper.duration ?? "0:00")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Text("•")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                    
+                    Text(wallpaper.resolution ?? "720p")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
                 }
             }
         }
-        .onAppear {
-            loadVideoPreview()
-        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(12)
+        .shadow(radius: 2)
     }
     
-    private func loadVideoPreview() {
-        // Create a muted player for thumbnail preview
-        let newPlayer = AVPlayer(url: wallpaper.videoURL)
-        newPlayer.isMuted = true
-        newPlayer.volume = 0
-        
-        // Set to loop for preview
-        newPlayer.actionAtItemEnd = .none
-        
+    private func loadVideoThumbnail() {
+        // For now, create a simple colored placeholder
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.player = newPlayer
-            self.player?.play()
+            let size = NSSize(width: 200, height: 140)
+            let image = NSImage(size: size)
+            image.lockFocus()
+            
+            // Create gradient background
+            let gradient = NSGradient(colors: [
+                NSColor.blue,
+                NSColor.purple
+            ])
+            gradient?.draw(in: NSRect(origin: .zero, size: size), angle: 45)
+            
+            // Add play icon
+            let playSize: CGFloat = 30
+            let centerX = size.width / 2
+            let centerY = size.height / 2
+            
+            let playPath = NSBezierPath()
+            playPath.move(to: NSPoint(x: centerX - playSize * 0.3, y: centerY - playSize))
+            playPath.line(to: NSPoint(x: centerX - playSize * 0.3, y: centerY + playSize))
+            playPath.line(to: NSPoint(x: centerX + playSize * 0.5, y: centerY))
+            playPath.close()
+            
+            NSColor.white.setFill()
+            playPath.fill()
+            
+            image.unlockFocus()
+            
+            self.thumbnailImage = image
             self.isLoading = false
         }
     }
@@ -444,21 +418,17 @@ struct WallpaperPreviewView: View {
                         .font(.system(size: 20, weight: .bold))
                     
                     HStack(spacing: 16) {
-                        if let duration = wallpaper.duration {
-                            Label(duration, systemImage: "clock")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
+                        Label(wallpaper.duration ?? "0:00", systemImage: "clock")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                         
-                        if let resolution = wallpaper.resolution {
-                            Label(resolution, systemImage: "video")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
-                        }
+                        Label(wallpaper.resolution ?? "720p", systemImage: "display")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
                     }
                 }
-                
-                Divider()
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
                 
                 // Actions
                 VStack(spacing: 12) {
@@ -466,7 +436,7 @@ struct WallpaperPreviewView: View {
                         setAsDesktopWallpaper()
                     }) {
                         HStack {
-                            Image(systemName: "desktopcomputer")
+                            Image(systemName: "rectangle.on.rectangle")
                             Text("Set as Desktop Wallpaper")
                         }
                         .frame(maxWidth: .infinity)
@@ -507,10 +477,8 @@ struct WallpaperPreviewView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(isDownloading)
-                }
-                
-                if isDownloading {
-                    VStack(spacing: 8) {
+                    
+                    if isDownloading {
                         ProgressView(value: downloadProgress)
                             .progressViewStyle(LinearProgressViewStyle())
                         
@@ -526,9 +494,8 @@ struct WallpaperPreviewView: View {
                             .padding(.top, 8)
                     }
                 }
+                .padding(24)
             }
-            .padding(24)
-            
             Spacer()
         }
         .frame(width: 500, height: 600)
@@ -682,72 +649,36 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            Text("Settings")
-                .font(.system(size: 20, weight: .bold))
-                .padding(.top, 20)
-                .padding(.horizontal, 24)
-            
-            Divider()
-                .padding(.top, 16)
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Playback Settings
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Playback")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        
-                        Toggle("Mute audio", isOn: $wallpaperManager.isMuted)
-                        Toggle("Loop playback", isOn: $wallpaperManager.shouldLoop)
-                    }
-                    .padding(.horizontal, 24)
-                    
-                    Divider()
-                    
-                    // Performance Settings
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Performance")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        
-                        Toggle("Reduce motion", isOn: $wallpaperManager.reduceMotion)
-                        Toggle("Low power mode", isOn: $wallpaperManager.lowPowerMode)
-                    }
-                    .padding(.horizontal, 24)
-                    
-                    Divider()
-                    
-                    // Storage
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Storage")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        
-                        Button("Clear Cache") {
-                            wallpaperManager.clearCache()
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button("Reset All Wallpapers") {
-                            wallpaperManager.resetAll()
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.red)
-                    }
-                    .padding(.horizontal, 24)
+            // Header
+            HStack {
+                Text("Settings")
+                    .font(.system(size: 20, weight: .bold))
+                
+                Spacer()
+                
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
                 }
-                .padding(.vertical, 20)
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
             
             Divider()
             
-            Button("Close") {
-                dismiss()
+            // Settings
+            VStack(alignment: .leading, spacing: 20) {
+                Toggle("Mute wallpaper audio", isOn: $wallpaperManager.isMuted)
+                Toggle("Loop wallpapers", isOn: $wallpaperManager.shouldLoop)
+                Toggle("Reduce motion", isOn: $wallpaperManager.reduceMotion)
+                Toggle("Low power mode", isOn: $wallpaperManager.lowPowerMode)
             }
-            .padding()
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 24)
+            
+            Spacer()
         }
-        .frame(width: 400, height: 400)
+        .frame(width: 400, height: 300)
     }
 }

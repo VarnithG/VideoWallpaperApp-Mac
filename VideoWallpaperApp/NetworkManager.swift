@@ -1,6 +1,24 @@
 import Foundation
 import Combine
 
+// MARK: - Network Error
+enum NetworkError: Error, LocalizedError {
+    case invalidURL
+    case downloadFailed
+    case decodingFailed
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid URL provided"
+        case .decodingFailed:
+            return "Failed to decode response"
+        case .downloadFailed:
+            return "Failed to download content"
+        }
+    }
+}
+
 // MARK: - Wallpaper Model
 struct Wallpaper: Identifiable, Codable, Hashable {
     let id: String
@@ -90,6 +108,8 @@ class NetworkManager: ObservableObject {
         ]
         
         wallpapers = sampleWallpapers
+        
+        print("Loaded \(sampleWallpapers.count) wallpapers")
         
         return sampleWallpapers
     }
@@ -305,26 +325,5 @@ class NetworkManager: ObservableObject {
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
         
         return destinationURL
-    }
-}
-
-// MARK: - Network Error
-enum NetworkError: LocalizedError {
-    case invalidURL
-    case decodingFailed
-    case downloadFailed
-    case noResultsFound
-    
-    var errorDescription: String? {
-        switch self {
-        case .invalidURL:
-            return "Invalid URL provided"
-        case .decodingFailed:
-            return "Failed to decode response"
-        case .downloadFailed:
-            return "Failed to download content"
-        case .noResultsFound:
-            return "No wallpapers found"
-        }
     }
 }
