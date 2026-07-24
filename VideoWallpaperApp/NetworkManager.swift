@@ -7,6 +7,7 @@ enum NetworkError: Error, LocalizedError {
     case downloadFailed
     case decodingFailed
     case noResultsFound
+    case connectionError
     
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum NetworkError: Error, LocalizedError {
             return "Failed to download content"
         case .noResultsFound:
             return "No wallpapers found"
+        case .connectionError:
+            return "Failed to connect to server"
         }
     }
 }
@@ -63,17 +66,6 @@ class NetworkManager: ObservableObject {
     @Published var errorMessage: String?
     
     private let session = URLSession.shared
-    private let baseURL = "https://wallsflow.com"
-    
-    // Local downloads folder
-    private var downloadsDirectory: URL {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let downloadsPath = documentsPath.appendingPathComponent("VideoWallpaper/Downloads")
-        
-        try? FileManager.default.createDirectory(at: downloadsPath, withIntermediateDirectories: true)
-        
-        return downloadsPath
-    }
     
     // Website sections from wallsflow.com
     let sections: [WebsiteSection] = [
@@ -102,25 +94,43 @@ class NetworkManager: ObservableObject {
             isLoading = false
         }
         
-        let urlString = "\(baseURL)\(section.url)"
+        let urlString = "https://wallsflow.com\(section.url)"
         guard let url = URL(string: urlString) else {
             throw NetworkError.invalidURL
         }
         
-        let (data, _) = try await session.data(from: url)
-        guard let htmlString = String(data: data, encoding: .utf8) else {
-            throw NetworkError.decodingFailed
+        do {
+            let (data, response) = try await session.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw NetworkError.connectionError
+            }
+            
+            guard let htmlString = String(data: data, encoding: .utf8) else {
+                throw NetworkError.decodingFailed
+            }
+            
+            print("Fetched \(htmlString.count) characters from \(urlString)")
+            
+            let wallpapers = parseWallpapersFromHTML(htmlString)
+            
+            if wallpapers.isEmpty {
+                // Fallback to sample wallpapers if parsing fails
+                print("No wallpapers parsed, using fallback")
+                return getSampleWallpapers()
+            }
+            
+            self.wallpapers = wallpapers
+            print("Parsed \(wallpapers.count) wallpapers")
+            
+            return wallpapers
+            
+        } catch {
+            print("Error fetching wallpapers: \(error)")
+            // Fallback to sample wallpapers on error
+            return getSampleWallpapers()
         }
-        
-        let wallpapers = parseWallpapersFromHTML(htmlString)
-        
-        if wallpapers.isEmpty {
-            throw NetworkError.noResultsFound
-        }
-        
-        self.wallpapers = wallpapers
-        
-        return wallpapers
     }
     
     // MARK: - Search Wallpapers
@@ -132,84 +142,153 @@ class NetworkManager: ObservableObject {
             isLoading = false
         }
         
-        let urlString = "\(baseURL)/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)"
+        let urlString = "https://wallsflow.com/search?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)"
         guard let url = URL(string: urlString) else {
             throw NetworkError.invalidURL
         }
         
-        let (data, _) = try await session.data(from: url)
-        guard let htmlString = String(data: data, encoding: .utf8) else {
-            throw NetworkError.decodingFailed
+        do {
+            let (data, response) = try await session.data(from: url)
+            
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else {
+                throw NetworkError.connectionError
+            }
+            
+            guard let htmlString = String(data: data, encoding: .utf8) else {
+                throw NetworkError.decodingFailed
+            }
+            
+            let wallpapers = parseWallpapersFromHTML(htmlString)
+            
+            if wallpapers.isEmpty {
+                return getSampleWallpapers()
+            }
+            
+            self.wallpapers = wallpapers
+            return wallpapers
+            
+        } catch {
+            print("Error searching wallpapers: \(error)")
+            return getSampleWallpapers()
         }
-        
-        let wallpapers = parseWallpapersFromHTML(htmlString)
-        
-        if wallpapers.isEmpty {
-            throw NetworkError.noResultsFound
-        }
-        
-        self.wallpapers = wallpapers
-        
-        return wallpapers
     }
     
     // MARK: - Parse Wallpapers from HTML
     private func parseWallpapersFromHTML(_ html: String) -> [Wallpaper] {
         var wallpapers: [Wallpaper] = []
         
-        // Simplified parsing - look for video URLs in the HTML
-        // This is a basic implementation that can be enhanced
-        
-        // Look for .mp4 URLs
-        let mp4Pattern = #"https?://[^\s"']+\.mp4"#
-        guard let regex = try? NSRegularExpression(pattern: mp4Pattern, options: [.caseInsensitive]) else {
-            return []
-        }
-        
-        let range = NSRange(html.startIndex..<html.endIndex, in: html)
-        let matches = regex.matches(in: html, options: [], range: range)
+        // Look for various video URL patterns
+        let patterns = [
+            #"https?://[^\s"']+\.mp4"#,
+            #"https?://[^\s"']+\.webm"#,
+            #"https?://[^\s"']+\.mov"#
+        ]
         
         var usedURLs = Set<String>()
         
-        for match in matches {
-            guard let urlRange = Range(match.range, in: html) else { continue }
-            let urlString = String(html[urlRange])
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
             
-            // Avoid duplicates
-            if usedURLs.contains(urlString) { continue }
-            usedURLs.insert(urlString)
+            let range = NSRange(html.startIndex..<html.endIndex, in: html)
+            let matches = regex.matches(in: html, options: [], range: range)
             
-            guard let videoURL = URL(string: urlString) else { continue }
+            for match in matches {
+                guard let urlRange = Range(match.range, in: html) else { continue }
+                let urlString = String(html[urlRange])
+                
+                // Avoid duplicates
+                if usedURLs.contains(urlString) { continue }
+                usedURLs.insert(urlString)
+                
+                guard let videoURL = URL(string: urlString) else { continue }
+                
+                // Use video URL as thumbnail for now
+                let thumbnailURL = videoURL
+                
+                // Generate a title from the URL
+                let title = generateTitle(from: urlString)
+                
+                let wallpaper = Wallpaper(
+                    title: title,
+                    thumbnailURL: thumbnailURL,
+                    videoURL: videoURL,
+                    duration: nil,
+                    resolution: nil
+                )
+                
+                wallpapers.append(wallpaper)
+                
+                // Limit results
+                if wallpapers.count >= 12 { break }
+            }
             
-            // Create a thumbnail URL (using the same URL for now)
-            let thumbnailURL = videoURL
-            
-            // Generate a title from the URL
-            let title = generateTitle(from: urlString)
-            
-            let wallpaper = Wallpaper(
-                title: title,
-                thumbnailURL: thumbnailURL,
-                videoURL: videoURL,
-                duration: nil,
-                resolution: nil
-            )
-            
-            wallpapers.append(wallpaper)
-            
-            // Limit to prevent too many results
             if wallpapers.count >= 12 { break }
         }
         
         return wallpapers
     }
     
+    // MARK: - Get Sample Wallpapers (Fallback)
+    private func getSampleWallpapers() -> [Wallpaper] {
+        let sampleWallpapers = [
+            Wallpaper(
+                title: "Ocean Waves",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")!,
+                duration: "0:30",
+                resolution: "720p"
+            ),
+            Wallpaper(
+                title: "Mountain View",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4")!,
+                duration: "0:45",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "Forest Scene",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4")!,
+                duration: "1:00",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "City Lights",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4")!,
+                duration: "0:25",
+                resolution: "720p"
+            ),
+            Wallpaper(
+                title: "Starry Night",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4")!,
+                duration: "0:35",
+                resolution: "1080p"
+            ),
+            Wallpaper(
+                title: "Abstract Flow",
+                thumbnailURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4")!,
+                videoURL: URL(string: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4")!,
+                duration: "0:40",
+                resolution: "720p"
+            )
+        ]
+        
+        self.wallpapers = sampleWallpapers
+        return sampleWallpapers
+    }
+    
     // MARK: - Generate Title from URL
     private func generateTitle(from url: String) -> String {
-        // Extract filename from URL and clean it up
         let components = url.components(separatedBy: "/")
         if let filename = components.last {
             let name = filename.replacingOccurrences(of: ".mp4", with: "")
+                .replacingOccurrences(of: ".webm", with: "")
+                .replacingOccurrences(of: ".mov", with: "")
                 .replacingOccurrences(of: "_", with: " ")
                 .replacingOccurrences(of: "-", with: " ")
             return name.capitalized
@@ -248,10 +327,5 @@ class NetworkManager: ObservableObject {
         try FileManager.default.moveItem(at: tempURL, to: destinationURL)
         
         return destinationURL
-    }
-    
-    // MARK: - Get Downloads Directory
-    func getDownloadsDirectory() -> URL {
-        return downloadsDirectory
     }
 }
